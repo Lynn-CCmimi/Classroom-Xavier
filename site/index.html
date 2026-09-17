@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
+<title>Lynn 课堂</title>
+<link rel="stylesheet" href="style.css">
+<script src="config.js"></script>
+</head>
+<body>
+<div id="login" class="login" hidden>
+  <form id="loginForm">
+    <h1>Lynn 课堂</h1>
+    <input id="u" type="text" placeholder="用户名" autocomplete="username" autocapitalize="off">
+    <input id="p" type="password" placeholder="密码" autocomplete="current-password">
+    <div class="err" id="loginErr"></div>
+    <button class="mbtn primary" type="submit">登录</button>
+  </form>
+</div>
+<div id="app" hidden>
+  <header class="hdr" id="hdr"></header>
+  <main id="main"></main>
+  <nav class="tabbar" id="tabbar"></nav>
+</div>
+<div id="overlay"></div>
+<div id="modal"></div>
+<div id="toast" class="toast" hidden></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
