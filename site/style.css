@@ -81,6 +81,17 @@ svg { display: block; }
 .tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 11px; }
 .tag.bad { background: var(--bad-soft); color: var(--bad); } .tag.warn { background: var(--warn-soft); color: var(--warn); }
 .tag.blue { background: var(--blue-soft); color: var(--blue); } .tag.mute { color: var(--line); }
+.list.online .row { grid-template-columns: 40px 1fr 150px 60px 50px 70px 300px; }
+.row.absent .nm, .row.absent .eng, .row.absent .sc { opacity: .4; }
+.arow { display: flex; gap: 6px; }
+.ab { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 6px 8px; font-size: 12px; font-weight: 600; color: var(--mute); min-height: 34px; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.ab small { font-size: 10px; font-weight: 500; }
+.ab.on { border-color: transparent; }
+.ab.on.bad { background: var(--bad-soft); color: var(--bad); }
+.ab.on.warn { background: var(--warn-soft); color: var(--warn); }
+.ab.on.purple { background: var(--purple-soft); color: var(--purple); }
+.att-stats { margin: 14px 16px 0; padding: 10px 14px; border-radius: 10px; background: var(--acc-soft); color: var(--acc); font-size: 13px; display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }
+.att-stats span b { font-size: 15px; }
 
 /* ---------- 面板 / 弹窗 ---------- */
 .dim-bg { position: fixed; inset: 0; background: rgba(28,27,25,.35); z-index: 100; }
@@ -167,6 +178,12 @@ svg { display: block; }
   .row { grid-template-columns: 28px 1fr 60px 44px; gap: 8px; padding: 12px; }
   .row .eng, .row .c-call, .row .c-att { display: none; }
   .row.h .c-call, .row.h .c-att { display: none; }
+  .list.online .row { grid-template-columns: 28px 1fr 44px; grid-template-areas: "n nm sc" "a a a"; row-gap: 8px; }
+  .list.online .row .num { grid-area: n; } .list.online .row .nm { grid-area: nm; } .list.online .row .sc { grid-area: sc; }
+  .list.online .row > span:nth-child(5) { display: none; }
+  .list.online .row .c-att.arow { display: flex; grid-area: a; }
+  .list.online .row.h .c-att { display: none; }
+  .att-stats { margin: 10px 12px 0; gap: 12px; font-size: 12px; }
   .two { grid-template-columns: 1fr; gap: 12px; }
   .sheet { padding: 14px 16px calc(16px + env(safe-area-inset-bottom)); max-height: 92dvh; }
   .sheet-hd .name { font-size: 19px; } .sheet-hd .score { font-size: 28px; }

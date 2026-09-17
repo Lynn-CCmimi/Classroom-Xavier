@@ -112,36 +112,60 @@ function renderMain() {
       <div class="room">${html}<div class="wb">WHITEBOARD · 黑板${c.id === 'G9E' ? ` · 已轮转 ${c.rotation_step || 0} 次` : ''}</div></div>
       <div class="legend"><span><i style="background:var(--bad)"></i>上季度有 F</span><span><i style="background:var(--warn)"></i>上季度有 D</span><span><i class="bar"></i>本季度还没被点过</span><span>单击 → 面板 · 长按 → 点过了</span></div>`;
   } else {
-    const date = classDate(c);
-    const rows = classStudents(c.id).map(s => {
-      const r = risk(s.id), n = called(s.id), a = attOf(s.id, date);
-      const att = [...attText(a, 'att'), ...attText(a, 'cam')].join(', ');
-      return `<div class="row ${visible(s.id) ? '' : 'dim'}" data-id="${s.id}"><span class="num">${pad(s.num ?? '')}</span><span class="nm">${h(s.name)}${r ? ` <span class="dot ${r === 'F' ? 'bad' : 'warn'}" style="position:static;display:inline-block;margin-left:4px"></span>` : ''}</span><span class="eng">${h(s.eng_name || '')}</span><span class="sc">${score(s.id)}</span><span>${r ? `<span class="tag ${r === 'F' ? 'bad' : 'warn'}">${r}</span>` : '<span class="tag mute">—</span>'}</span><span class="c-call">${n === 0 ? '<span class="tag blue">0</span>' : `<b>${n}</b>`}</span><span class="c-att" style="font-size:12px;color:${a && a.flags.length ? 'var(--warn)' : 'var(--mute)'}">${att || '出勤'}</span></div>`;
-    }).join('');
-    m.innerHTML = `<div class="list"><div class="row h"><span>#</span><span>姓名</span><span class="eng">英文名</span><span>本季分</span><span>上季</span><span class="c-call">点名次数</span><span class="c-att">今日</span></div>${rows}</div>`;
+    const date = classDate(c), online = !!c.is_online;
+    const rows = classStudents(c.id).map(s => rowHtml(s, date, online)).join('');
+    const stats = online ? attStats(c.id, date) : '';
+    m.innerHTML = `${stats}<div class="list ${online ? 'online' : ''}"><div class="row h"><span>#</span><span>姓名</span><span class="eng">英文名</span><span>本季分</span><span>上季</span><span class="c-call">点名次数</span><span class="c-att">${online ? '线上考勤 · 点一下登记，再点取消' : '今日'}</span></div>${rows}</div>`;
   }
   bindCards();
+}
+function rowHtml(s, date, online) {
+  const r = risk(s.id), n = called(s.id), a = attOf(s.id, date);
+  const flags = a ? a.flags : [];
+  const attCell = online
+    ? `<span class="c-att arow">
+        <button class="ab ${flags.includes('absent') ? 'on bad' : ''}" data-att="absent">缺席</button>
+        <button class="ab ${flags.includes('late') ? 'on warn' : ''}" data-att="late">迟到${flags.includes('late') && a.late_time ? '<small>' + a.late_time + '</small>' : ''}</button>
+        <button class="ab ${flags.includes('camera_off') ? 'on purple' : ''}" data-att="camera_off">摄像头</button>
+        <button class="ab ${flags.includes('no_response') ? 'on purple' : ''}" data-att="no_response">无回应${flags.includes('no_response') && a.noresp_time ? '<small>' + a.noresp_time + '</small>' : ''}</button></span>`
+    : `<span class="c-att" style="font-size:12px;color:${flags.length ? 'var(--warn)' : 'var(--mute)'}">${[...attText(a, 'att'), ...attText(a, 'cam')].join(', ') || '出勤'}</span>`;
+  return `<div class="row ${visible(s.id) ? '' : 'dim'} ${flags.includes('absent') ? 'absent' : ''}" data-id="${s.id}"><span class="num">${pad(s.num ?? '')}</span><span class="nm">${h(s.name)}${r ? ` <span class="dot ${r === 'F' ? 'bad' : 'warn'}" style="position:static;display:inline-block;margin-left:4px"></span>` : ''}</span><span class="eng">${h(s.eng_name || '')}</span><span class="sc">${score(s.id)}</span><span>${r ? `<span class="tag ${r === 'F' ? 'bad' : 'warn'}">${r}</span>` : '<span class="tag mute">—</span>'}</span><span class="c-call">${n === 0 ? '<span class="tag blue">0</span>' : `<b>${n}</b>`}</span>${attCell}</div>`;
+}
+function attStats(cid, date) {
+  const cnt = { absent: 0, late: 0, camera_off: 0, no_response: 0 };
+  classStudents(cid).forEach(s => { const a = attOf(s.id, date); if (a) a.flags.forEach(f => cnt[f]++); });
+  return `<div class="att-stats" id="attStats"><b>${fmtDate(date)} 线上考勤</b><span>缺席 <b>${cnt.absent}</b></span><span>迟到 <b>${cnt.late}</b></span><span>摄像头 <b>${cnt.camera_off}</b></span><span>无回应 <b>${cnt.no_response}</b></span></div>`;
+}
+function refreshRow(sid) {
+  const c = cls(), el = document.querySelector(`.row[data-id="${sid}"]`); if (!el) return;
+  const s = stuById(sid); const tmp = document.createElement('div'); tmp.innerHTML = rowHtml(s, classDate(c), !!c.is_online);
+  el.replaceWith(tmp.firstElementChild); bindRow(document.querySelector(`.row[data-id="${sid}"]`));
+  const st = $('#attStats'); if (st) st.outerHTML = attStats(c.id, classDate(c));
+  renderHeader();
 }
 function renderTabbar() {
   $('#tabbar').innerHTML = store.classes.map(x => `<button data-cls="${x.id}" class="${x.id === ui.cls ? 'on' : ''}">${h(x.name)}</button>`).join('');
 }
 
 // ---------- 卡片交互：单击 / 长按 ----------
+function bindRow(el) {
+  let timer = null, fired = false, sx = 0, sy = 0;
+  const id = el.dataset.id;
+  el.onpointerdown = e => {
+    if (e.target.closest('[data-att]')) return;
+    fired = false; sx = e.clientX; sy = e.clientY;
+    if (ui.swap) return;
+    timer = setTimeout(() => { fired = true; markCalled(id, el); }, 450);
+  };
+  const cancel = () => { clearTimeout(timer); timer = null; };
+  el.onpointermove = e => { if (Math.abs(e.clientX - sx) > 8 || Math.abs(e.clientY - sy) > 8) cancel(); };
+  el.onpointerup = cancel; el.onpointercancel = cancel; el.onpointerleave = cancel;
+  el.onclick = e => { if (e.target.closest('[data-att]')) return; if (fired) { fired = false; return; } ui.swap ? swapTap(id) : openPanel(id); };
+  el.oncontextmenu = e => e.preventDefault();
+  el.querySelectorAll('[data-att]').forEach(b => b.onclick = async e => { e.stopPropagation(); await setAttFlag(id, b.dataset.att); refreshRow(id); });
+}
 function bindCards() {
-  document.querySelectorAll('[data-id]').forEach(el => {
-    let timer = null, fired = false, sx = 0, sy = 0;
-    const id = el.dataset.id;
-    el.onpointerdown = e => {
-      fired = false; sx = e.clientX; sy = e.clientY;
-      if (ui.swap) return;
-      timer = setTimeout(() => { fired = true; markCalled(id, el); }, 450);
-    };
-    const cancel = () => { clearTimeout(timer); timer = null; };
-    el.onpointermove = e => { if (Math.abs(e.clientX - sx) > 8 || Math.abs(e.clientY - sy) > 8) cancel(); };
-    el.onpointerup = cancel; el.onpointercancel = cancel; el.onpointerleave = cancel;
-    el.onclick = () => { if (fired) { fired = false; return; } ui.swap ? swapTap(id) : openPanel(id); };
-    el.oncontextmenu = e => e.preventDefault();
-  });
+  document.querySelectorAll('[data-id]').forEach(bindRow);
   document.querySelectorAll('.grp-label').forEach(el => el.onclick = () => openGroupPanel(parseInt(el.dataset.gi)));
 }
 async function markCalled(sid, el) {
@@ -210,10 +234,10 @@ async function addScore(sid, delta, reason, close) {
   toast(`${stuById(sid).name} ${delta > 0 ? '+' : ''}${delta} ${reason}`);
   render(); if (close) closePanel(); else openPanel(sid);
 }
-async function toggleAtt(sid, flag) {
+async function setAttFlag(sid, flag) {
   const c = cls(), date = classDate(c);
   const a = attOf(sid, date);
-  if (flag === 'clear') { await db.deleteAttendance(sid, date); render(); openPanel(sid); return; }
+  if (flag === 'clear') { await db.deleteAttendance(sid, date); return; }
   let flags = a ? [...a.flags] : [];
   let late_time = a?.late_time || null, noresp_time = a?.noresp_time || null;
   if (flags.includes(flag)) { flags = flags.filter(f => f !== flag); if (flag === 'late') late_time = null; if (flag === 'no_response') noresp_time = null; }
@@ -223,8 +247,8 @@ async function toggleAtt(sid, flag) {
   }
   if (!flags.length) await db.deleteAttendance(sid, date);
   else await db.upsertAttendance({ student_id: sid, class_id: c.id, on_date: date, flags, late_time, noresp_time });
-  render(); openPanel(sid);
 }
+async function toggleAtt(sid, flag) { await setAttFlag(sid, flag); render(); openPanel(sid); }
 async function saveTimes(sid) {
   const c = cls(), date = classDate(c), a = attOf(sid, date); if (!a) return;
   const lt = $('#lateT'), nt = $('#norT');
