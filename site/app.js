@@ -115,7 +115,7 @@ function groupBlock(g, gi, layout) {
   const inner = hasHead
     ? card(ids[0]).replace('class="card', 'class="card head') + ids.slice(1, 5).map(card).join('')
     : ids.slice(0, layout === 'grid' ? 4 : 4).map(card).join('') + (ids.length > 4 && !hasHead ? ids.slice(4).map(card).join('') : '');
-  return `<div class="grp"><div class="grp-label ${g.head !== false && layout !== 'grid' ? 'head' : ''}" data-gi="${gi}">▸ ${h(g.name)}</div><div class="grp-grid">${inner}</div></div>`;
+  return `<div class="grp"><div class="grp-label ${g.head !== false && layout !== 'grid' ? 'head' : ''}" data-gi="${gi}"><span class="full">${h(g.name)}</span><span class="short">${h(g.name.replace(/^组/, ''))}</span></div><div class="grp-grid">${inner}</div></div>`;
 }
 function renderMain() {
   const c = cls(); if (!c) return;
@@ -250,6 +250,7 @@ async function addScore(sid, delta, reason, close) {
   await db.addEvent({ student_id: sid, class_id: c.id, term: term(), kind: 'score', delta, reason, day: dayInfo(classDate(c), c).day, on_date: classDate(c) });
   toast(`${stuById(sid).name} ${delta > 0 ? '+' : ''}${delta} ${reason}`);
   render(); if (close) closePanel(); else openPanel(sid);
+  const el = document.querySelector(`.card[data-id="${sid}"] .sc, .row[data-id="${sid}"] .sc`); if (el) { el.classList.add('pop'); if (delta < 0) el.classList.add('neg'); }
 }
 async function setAttFlag(sid, flag) {
   const c = cls(), date = classDate(c);
