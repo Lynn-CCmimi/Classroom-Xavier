@@ -115,20 +115,20 @@ w('insert into public.cls_events (student_id,class_id,term,kind,delta,reason,day
 w(',\n'.join('  (%s,%s,%s,%s,%d,%s,%s,%s)' % (esc(e['student_id']), esc(e['class_id']), esc(e['term']), esc(e['kind']), e['delta'], esc(e['reason']),
                                             e['day'] if e['day'] else 'null', esc(e['on_date']) if e['on_date'] else 'null') for e in events))
 w(';\n\n')
-for a in attendance:
-    w('insert into public.cls_attendance (student_id,class_id,on_date,flags,late_time,noresp_time) values (%s,%s,%s,%s,%s,%s) on conflict (student_id,on_date) do update set flags=excluded.flags,late_time=excluded.late_time,noresp_time=excluded.noresp_time;\n'
-      % (esc(a['student_id']), esc(a['class_id']), esc(a['on_date']), "array[%s]::text[]" % ','.join(esc(f) for f in a['flags']),
-         esc(a['late_time']) if a['late_time'] else 'null', esc(a['noresp_time']) if a['noresp_time'] else 'null'))
+w('insert into public.cls_attendance (student_id,class_id,on_date,flags,late_time,noresp_time) values\n')
+w(',\n'.join('  (%s,%s,%s,%s,%s,%s)' % (esc(a['student_id']), esc(a['class_id']), esc(a['on_date']), "array[%s]::text[]" % ','.join(esc(f) for f in a['flags']),
+    esc(a['late_time']) if a['late_time'] else 'null', esc(a['noresp_time']) if a['noresp_time'] else 'null') for a in attendance))
+w('\n  on conflict (student_id,on_date) do update set flags=excluded.flags,late_time=excluded.late_time,noresp_time=excluded.noresp_time;\n')
 w('\n')
-for e in exams:
-    w('insert into public.cls_exams (student_id,term,name,grade,score) values (%s,%s,%s,%s,%s) on conflict (student_id,term,name) do update set grade=excluded.grade,score=excluded.score,updated_at=now();\n'
-      % (esc(e['student_id']), esc(e['term']), esc(e['name']), esc(e['grade']), e['score'] if e['score'] is not None else 'null'))
+w('insert into public.cls_exams (student_id,term,name,grade,score) values\n')
+w(',\n'.join('  (%s,%s,%s,%s,%s)' % (esc(e['student_id']), esc(e['term']), esc(e['name']), esc(e['grade']), e['score'] if e['score'] is not None else 'null') for e in exams))
+w('\n  on conflict (student_id,term,name) do update set grade=excluded.grade,score=excluded.score,updated_at=now();\n')
 w('\n')
 for k, v in settings.items():
     w('insert into public.cls_settings (key,value) values (%s,%s) on conflict (key) do update set value=excluded.value;\n' % (esc(k), jl(v)))
-w('\ninsert into public.cls_backups (label,payload) values (%s,%s);\n' % (esc('旧系统快照 ' + SNAP), jl(snap)))
 w('\ncommit;\n')
 io.open('../supabase/seed.sql', 'w', encoding='utf-8').write(out.getvalue())
+io.open('../supabase/seed_backup.sql', 'w', encoding='utf-8').write('-- 旧系统整包备份，可选\ninsert into public.cls_backups (label,payload) values (%s,%s);\n' % (esc('旧系统快照 ' + SNAP), jl(snap)))
 
 # ---------- 本地预览用 JSON ----------
 json.dump(dict(classes=classes, students=students, events=events, attendance=attendance, exams=exams, settings=settings),

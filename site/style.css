@@ -116,8 +116,8 @@ svg { display: block; }
 .inline input { flex: 1; padding: 9px 12px; border: 1.5px solid var(--line); border-radius: 10px; font-size: 15px; min-width: 0; }
 .inline input:focus { outline: none; border-color: var(--blue); }
 
-.modal { position: fixed; inset: 0; z-index: 110; background: rgba(28,27,25,.4); display: flex; align-items: center; justify-content: center; padding: 16px; }
-.box { background: #fff; border-radius: 18px; padding: 20px; width: 100%; max-width: 420px; max-height: 88vh; max-height: 88dvh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.modal { position: fixed; top: 0; left: 0; width: 100%; height: 100vh; height: 100dvh; z-index: 110; background: rgba(28,27,25,.4); display: flex; align-items: flex-start; justify-content: center; padding: max(20px, env(safe-area-inset-top)) 16px 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.box { background: #fff; border-radius: 18px; padding: 20px; width: 100%; max-width: 420px; max-height: calc(100vh - 40px); max-height: calc(100dvh - 40px); overflow-y: auto; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
 .box.wide { max-width: 720px; }
 .box h3 { margin: 0 0 4px; font-size: 17px; }
 .box .hint { font-size: 12px; color: var(--mute); }
