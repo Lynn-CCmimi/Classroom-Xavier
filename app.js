@@ -24,7 +24,7 @@ const ICON = {
 };
 
 // ---------- 状态 ----------
-const ui = { cls: localStorage.getItem('cls_cur') || 'G9E', view: localStorage.getItem('cls_view') || (innerWidth < 760 ? 'list' : 'seat'), filter: null, swap: false, swapFirst: null };
+const ui = { date: todayStr(), cls: localStorage.getItem('cls_cur') || 'G9E', view: localStorage.getItem('cls_view') || (innerWidth < 760 ? 'list' : 'seat'), filter: null, swap: false, swapFirst: null };
 
 // ---------- 派生数据 ----------
 const S = () => store.settings;
@@ -33,8 +33,25 @@ const prevTerm = () => { const n = parseInt(term().slice(1)); return n > 1 ? 'Q'
 const cls = () => store.classes.find(c => c.id === ui.cls);
 const stuById = id => store.students.find(s => s.id === id);
 const classStudents = cid => store.students.filter(s => s.class_id === cid && s.active !== false).sort((a, b) => (a.num ?? 999) - (b.num ?? 999));
-const classDate = c => (c.current_day ? (c.day_dates || {})[c.current_day] : (c.day_dates || {})._d0) || todayStr();
-const lastNonZero = c => c.current_day || (c.day_dates || {})._last || 1;
+let CAL = { days: {} };
+const classDate = () => ui.date;
+// 某天是 D 几 / 什么模式：手动覆盖 > 学校日历 > 旧数据
+function dayInfo(date, c) {
+  const ov = (S().day_override || {})[date] || {};
+  const k = CAL.days[date] || {};
+  let day = ov.day !== undefined ? ov.day : k.day;
+  let mode = ov.mode || k.mode || null;
+  let src = ov.day !== undefined || ov.mode ? 'manual' : (k.day !== undefined && k.day !== null) ? 'school' : null;
+  if (day === undefined || day === null) {
+    if (src !== 'manual' && date in CAL.days) { day = null; src = src || 'school'; }
+    else { c = c || cls(); const dd = (c && c.day_dates) || {}; const kk = Object.keys(dd).find(x => /^\d$/.test(x) && dd[x] === date); if (kk) { day = parseInt(kk); src = 'legacy'; } else if (c && date === todayStr() && c.current_day != null && !(date in CAL.days)) { day = c.current_day; src = 'legacy'; } }
+  }
+  if (!mode && day && day > 0 && src === 'legacy' && c && c.is_online) mode = 'chips';
+  return { day: day === undefined ? null : day, mode, src, note: k.note || '' };
+}
+const isOnline = (date = ui.date) => dayInfo(date).mode === 'chips';
+const dayLabel = info => info.day === 0 ? 'D0 · 停课' : info.day ? 'D' + info.day : (info.src === 'school' ? '放假' : '未排');
+const modeLabel = m => m === 'chips' ? '线上 · Zoom' : m === 'pal' ? 'PAL · 异步' : m === 'onsite' ? '到校' : '';
 const termEvents = sid => store.events.filter(e => e.student_id === sid && e.term === term());
 const score = sid => 100 + termEvents(sid).reduce((a, e) => a + (e.kind === 'score' ? e.delta : 0), 0);
 const called = sid => termEvents(sid).filter(e => e.kind === 'called' || (e.kind === 'score' && e.delta > 0)).length;
@@ -64,13 +81,13 @@ function render() { renderHeader(); renderMain(); renderTabbar(); }
 
 function renderHeader() {
   const c = cls(); if (!c) return;
-  const date = classDate(c);
+  const date = classDate(c); const info = dayInfo(date, c);
   const stus = classStudents(c.id);
   const nF = stus.filter(s => risk(s.id) === 'F').length, nZero = stus.filter(s => called(s.id) === 0).length;
   $('#hdr').innerHTML = `
     <div class="seg class-seg">${store.classes.map(x => `<button data-cls="${x.id}" class="${x.id === ui.cls ? 'on' : ''}">${h(x.name)}</button>`).join('')}</div>
-    <button class="hbtn ${c.current_day ? '' : 'warn'}" id="dayBtn">${ICON.cal}<b>${c.current_day ? 'D' + c.current_day : 'D0 · 停课'}</b><span class="date-txt" style="color:var(--mute)">· ${fmtDate(date)}</span></button>
-    <button class="hbtn ${c.is_online ? 'on' : ''}" id="onlineBtn">${ICON.wifi}${c.is_online ? '线上课' : '线下'}</button>
+    <button class="hbtn ${info.day === 0 || info.day === null ? 'warn' : ''}" id="dayBtn">${ICON.cal}<b>${dayLabel(info)}</b><span class="date-txt" style="color:var(--mute)">· ${fmtDate(date)}${date !== todayStr() ? ' · 非今天' : ''}</span></button>
+    <button class="hbtn ${info.mode === 'chips' ? 'on' : ''}" id="onlineBtn">${ICON.wifi}${modeLabel(info.mode) || '到校'}</button>
     ${c.id === 'G9E' ? `<button class="hbtn" id="rotBtn">${ICON.rot}轮转</button>` : ''}
     ${ui.swap ? `<button class="hbtn warn" id="swapOff">换座中 · 退出</button>` : ''}
     <div class="grow"></div>
@@ -112,7 +129,7 @@ function renderMain() {
       <div class="room">${html}<div class="wb">WHITEBOARD · 黑板${c.id === 'G9E' ? ` · 已轮转 ${c.rotation_step || 0} 次` : ''}</div></div>
       <div class="legend"><span><i style="background:var(--bad)"></i>上季度有 F</span><span><i style="background:var(--warn)"></i>上季度有 D</span><span><i class="bar"></i>本季度还没被点过</span><span>单击 → 面板 · 长按 → 点过了</span></div>`;
   } else {
-    const date = classDate(c), online = !!c.is_online;
+    const date = classDate(c), online = isOnline(date);
     const rows = classStudents(c.id).map(s => rowHtml(s, date, online)).join('');
     const stats = online ? attStats(c.id, date) : '';
     m.innerHTML = `${stats}<div class="list ${online ? 'online' : ''}"><div class="row h"><span>#</span><span>姓名</span><span class="eng">英文名</span><span>本季分</span><span>上季</span><span class="c-call">点名次数</span><span class="c-att">${online ? '线上考勤 · 点一下登记，再点取消' : '今日'}</span></div>${rows}</div>`;
@@ -138,7 +155,7 @@ function attStats(cid, date) {
 }
 function refreshRow(sid) {
   const c = cls(), el = document.querySelector(`.row[data-id="${sid}"]`); if (!el) return;
-  const s = stuById(sid); const tmp = document.createElement('div'); tmp.innerHTML = rowHtml(s, classDate(c), !!c.is_online);
+  const s = stuById(sid); const tmp = document.createElement('div'); tmp.innerHTML = rowHtml(s, classDate(c), isOnline(classDate(c)));
   el.replaceWith(tmp.firstElementChild); bindRow(document.querySelector(`.row[data-id="${sid}"]`));
   const st = $('#attStats'); if (st) st.outerHTML = attStats(c.id, classDate(c));
   renderHeader();
@@ -170,7 +187,7 @@ function bindCards() {
 }
 async function markCalled(sid, el) {
   const c = cls();
-  const ev = await db.addEvent({ student_id: sid, class_id: c.id, term: term(), kind: 'called', delta: 0, reason: '点名', day: c.current_day, on_date: classDate(c) });
+  const ev = await db.addEvent({ student_id: sid, class_id: c.id, term: term(), kind: 'called', delta: 0, reason: '点名', day: dayInfo(classDate(c), c).day, on_date: classDate(c) });
   if (el) { el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 400); }
   if (navigator.vibrate) navigator.vibrate(20);
   toast(`已点名 · ${stuById(sid).name}`, async () => { await db.deleteEvent(ev.id); render(); });
@@ -230,7 +247,7 @@ function openPanel(sid) {
 function closePanel() { panelSid = null; $('#overlay').innerHTML = ''; }
 async function addScore(sid, delta, reason, close) {
   const c = cls();
-  await db.addEvent({ student_id: sid, class_id: c.id, term: term(), kind: 'score', delta, reason, day: c.current_day, on_date: classDate(c) });
+  await db.addEvent({ student_id: sid, class_id: c.id, term: term(), kind: 'score', delta, reason, day: dayInfo(classDate(c), c).day, on_date: classDate(c) });
   toast(`${stuById(sid).name} ${delta > 0 ? '+' : ''}${delta} ${reason}`);
   render(); if (close) closePanel(); else openPanel(sid);
 }
@@ -265,7 +282,7 @@ function openGroupPanel(gi) {
     <div class="sec">减分</div><div class="wrap">${lib.minus.map(([r, d]) => `<button class="btn red" data-gd="${d}" data-gr="${h(r)}">${d} ${h(r)}</button>`).join('')}</div>
     <button class="mbtn" id="mClose">关闭</button>`);
   document.querySelectorAll('[data-gd]').forEach(b => b.onclick = async () => {
-    for (const id of g.student_ids) await db.addEvent({ student_id: id, class_id: c.id, term: term(), kind: 'score', delta: parseInt(b.dataset.gd), reason: b.dataset.gr, day: c.current_day, on_date: classDate(c) });
+    for (const id of g.student_ids) await db.addEvent({ student_id: id, class_id: c.id, term: term(), kind: 'score', delta: parseInt(b.dataset.gd), reason: b.dataset.gr, day: dayInfo(classDate(c), c).day, on_date: classDate(c) });
     toast(`${g.name} 全组 ${b.dataset.gd > 0 ? '+' : ''}${b.dataset.gd}`); closeModal(); render();
   });
 }
@@ -289,32 +306,31 @@ async function rotate() {
 }
 
 // ---------- D 几 / 日期 ----------
-function countWeekdays(a, b) { const s = new Date(a + 'T00:00:00'), e = new Date(b + 'T00:00:00'); let n = 0; const c = new Date(s); c.setDate(c.getDate() + 1); while (c <= e) { const d = c.getDay(); if (d && d !== 6) n++; c.setDate(c.getDate() + 1); } return n; }
-async function autoAdvance() {
-  const today = todayStr(), dow = new Date().getDay();
-  for (const c of store.classes) {
-    if (!c.last_opened) { await db.updateClass(c.id, { last_opened: today }); continue; }
-    if (c.last_opened === today) continue;
-    if (dow === 0 || dow === 6) { await db.updateClass(c.id, { last_opened: today }); continue; }
-    const w = countWeekdays(c.last_opened, today);
-    if (w > 0) { const next = ((lastNonZero(c) - 1 + w) % 7) + 1; const day_dates = { ...(c.day_dates || {}), [next]: today, _last: next }; await db.updateClass(c.id, { current_day: next, day_dates, last_opened: today }); }
-    else await db.updateClass(c.id, { last_opened: today });
-  }
+async function setOverride(date, patch) {
+  const all = { ...(S().day_override || {}) };
+  const cur = { ...(all[date] || {}), ...patch };
+  Object.keys(cur).forEach(k => { if (cur[k] === undefined) delete cur[k]; });
+  if (Object.keys(cur).length) all[date] = cur; else delete all[date];
+  await db.setSetting('day_override', all);
 }
 function openDayModal() {
-  const c = cls();
-  modal(`<h3>今天是 D 几？</h3><div class="hint">${h(c.name)} · 当前 ${c.current_day ? 'D' + c.current_day : 'D0 停课'} · ${fmtDate(classDate(c))}</div>
-    <div class="days">${[1, 2, 3, 4, 5, 6, 7].map(d => `<button class="${d === c.current_day ? 'on' : ''}" data-day="${d}">D${d}</button>`).join('')}<button class="${c.current_day === 0 ? 'on' : ''}" data-day="0" style="color:var(--bad)">D0<br><small style="font-weight:500">停课</small></button></div>
-    <div class="sec">这一天对应的日期</div><input type="date" id="dayDate" value="${classDate(c)}">
-    <button class="mbtn primary" id="dayOk">保存</button><button class="mbtn blue" id="dayCal">📆 回看以前某一天</button><button class="mbtn" id="mClose">取消</button>`);
-  let pick = c.current_day;
+  const c = cls(); const date = ui.date; const info = dayInfo(date, c);
+  const srcTxt = info.src === 'manual' ? '手动设置' : info.src === 'school' ? '学校日历' : info.src === 'legacy' ? '旧记录' : '学校还没排';
+  modal(`<h3>这一天是 D 几？</h3><div class="hint">${fmtDate(date)} · ${dayLabel(info)}${info.mode ? ' · ' + modeLabel(info.mode) : ''} · 来源：${srcTxt}${info.note ? '<br>' + h(info.note) : ''}</div>
+    <div class="sec">日期（改了只在本次有效，刷新回到今天）</div><input type="date" id="dayDate" value="${date}">
+    <div class="sec">Day</div>
+    <div class="days">${[1, 2, 3, 4, 5, 6, 7].map(d => `<button class="${d === info.day ? 'on' : ''}" data-day="${d}">D${d}</button>`).join('')}<button class="${info.day === 0 ? 'on' : ''}" data-day="0" style="color:var(--bad)">D0<br><small style="font-weight:500">停课</small></button></div>
+    <div class="sec">上课方式</div>
+    <div class="wrap"><button class="btn ${info.mode === 'onsite' || !info.mode ? 'on' : ''}" data-mode="onsite">到校</button><button class="btn purple ${info.mode === 'chips' ? 'on' : ''}" data-mode="chips">CHIPS 线上 Zoom</button><button class="btn ${info.mode === 'pal' ? 'on' : ''}" data-mode="pal">PAL 异步</button></div>
+    <button class="mbtn primary" id="dayOk">保存为手动设置</button>
+    ${info.src === 'manual' ? '<button class="mbtn" id="dayClear">清除手动设置，回到学校日历</button>' : ''}
+    <button class="mbtn blue" id="dayCal">📆 回看以前某一天</button><button class="mbtn" id="mClose">关闭</button>`);
+  let pick = info.day, mode = info.mode || 'onsite';
   document.querySelectorAll('[data-day]').forEach(b => b.onclick = () => { pick = parseInt(b.dataset.day); document.querySelectorAll('[data-day]').forEach(x => x.classList.toggle('on', x === b)); });
-  $('#dayOk').onclick = async () => {
-    const dt = $('#dayDate').value || todayStr();
-    const day_dates = { ...(c.day_dates || {}) };
-    if (pick) { day_dates[pick] = dt; day_dates._last = pick; } else { day_dates._d0 = dt; if (c.current_day) day_dates._last = c.current_day; }
-    await db.updateClass(c.id, { current_day: pick, day_dates, last_opened: todayStr() }); closeModal(); render();
-  };
+  document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { mode = b.dataset.mode; document.querySelectorAll('[data-mode]').forEach(x => x.classList.toggle('on', x === b)); });
+  $('#dayDate').onchange = e => { ui.date = e.target.value || todayStr(); closeModal(); render(); openDayModal(); };
+  $('#dayOk').onclick = async () => { await setOverride(ui.date, { day: pick === null ? undefined : pick, mode }); closeModal(); render(); };
+  const dc = $('#dayClear'); if (dc) dc.onclick = async () => { await setOverride(ui.date, { day: undefined, mode: undefined }); closeModal(); render(); };
   $('#dayCal').onclick = () => openCalendar();
 }
 
@@ -324,13 +340,6 @@ function classDates(cid) {
   store.events.filter(e => e.class_id === cid && e.on_date).forEach(e => set[e.on_date] = (set[e.on_date] || 0) + 1);
   store.attendance.filter(a => a.class_id === cid).forEach(a => set[a.on_date] = (set[a.on_date] || 0) + 1);
   return set;
-}
-function dayOfDate(c, date) {
-  const dd = c.day_dates || {};
-  const k = Object.keys(dd).find(k => /^\d$/.test(k) && dd[k] === date);
-  if (k) return parseInt(k);
-  const e = store.events.find(e => e.class_id === c.id && e.on_date === date && e.day);
-  return e ? e.day : null;
 }
 let calYM = null;
 function openCalendar(ym) {
@@ -343,7 +352,8 @@ function openCalendar(ym) {
   for (let i = 0; i < startDow; i++) cells += '<div></div>';
   for (let d = 1; d <= days; d++) {
     const ds = `${y}-${pad(m + 1)}-${pad(d)}`; const n = marks[ds];
-    cells += `<button class="cal-d ${n ? 'has' : ''} ${ds === today ? 'today' : ''}" data-date="${ds}" ${n ? '' : 'disabled'}><span>${d}</span>${n ? `<i>${n}</i>` : ''}</button>`;
+    const di = dayInfo(ds, c);
+    cells += `<button class="cal-d ${n ? 'has' : ''} ${ds === today ? 'today' : ''}" data-date="${ds}" ${n ? '' : 'disabled'}><span>${d}</span>${n ? `<i>${n}</i>` : di.day !== null && di.day !== undefined ? `<i style="color:var(--mute)">D${di.day}</i>` : ''}</button>`;
   }
   modal(`<h3>回看 · ${h(c.name)}</h3>
     <div class="inline" style="justify-content:space-between"><button class="btn" id="calPrev">‹ 上月</button><b>${y} 年 ${m + 1} 月</b><button class="btn" id="calNext">下月 ›</button></div>
@@ -356,14 +366,14 @@ function openCalendar(ym) {
   document.querySelectorAll('.cal-d.has').forEach(b => b.onclick = () => openDayReview(b.dataset.date));
 }
 function openDayReview(date) {
-  const c = cls(); const d = dayOfDate(c, date);
+  const c = cls(); const d = dayInfo(date, c).day;
   const stus = classStudents(c.id);
   const atts = stus.map(s => [s, attOf(s.id, date)]).filter(([, a]) => a && a.flags.length);
   const evs = store.events.filter(e => e.class_id === c.id && e.on_date === date).sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
   const byStu = {}; evs.forEach(e => (byStu[e.student_id] = byStu[e.student_id] || []).push(e));
   const attHtml = atts.length ? atts.map(([s, a]) => `<div class="rec"><span class="r"><b>${h(s.name)}</b> <span class="hint">${pad(s.num ?? '')}</span></span><span style="font-size:12px;color:var(--warn)">${[...attText(a, 'att'), ...attText(a, 'cam')].map(x => ATT_CN_TXT(x)).join('、')}</span></div>`).join('') : '<div class="hint">全员出勤</div>';
   const evHtml = Object.keys(byStu).length ? stus.filter(s => byStu[s.id]).map(s => `<div class="rec"><span class="r"><b>${h(s.name)}</b></span><span style="font-size:12px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${byStu[s.id].map(e => `<span class="tag ${e.kind === 'called' ? 'blue' : e.delta > 0 ? '' : 'bad'}" style="${e.delta > 0 ? 'background:var(--green-soft);color:var(--green)' : ''}">${e.kind === 'called' ? '点名' : (e.delta > 0 ? '+' : '') + e.delta + ' ' + h(e.reason || '')}</span>`).join('')}</span></div>`).join('') : '<div class="hint">没有加减分记录</div>';
-  modal(`<h3>${fmtDate(date)}${d ? ` · D${d}` : ''}</h3><div class="hint">${h(c.name)} · ${date}</div>
+  modal(`<h3>${fmtDate(date)}${d !== null && d !== undefined ? ` · D${d}` : ''}</h3><div class="hint">${h(c.name)} · ${date}</div>
     <div class="sec">考勤（${atts.length} 人）</div><div>${attHtml}</div>
     <div class="sec">加减分 / 点名（${evs.length} 条）</div><div>${evHtml}</div>
     <button class="mbtn blue" id="backCal">‹ 返回日历</button><button class="mbtn" id="mClose">关闭</button>`, true);
@@ -537,7 +547,7 @@ document.addEventListener('click', e => {
   else if (t.dataset.view) { ui.view = t.dataset.view; localStorage.setItem('cls_view', ui.view); render(); }
   else if (t.dataset.filter) { ui.filter = ui.filter === t.dataset.filter ? null : t.dataset.filter; render(); }
   else if (t.id === 'dayBtn') openDayModal();
-  else if (t.id === 'onlineBtn') { const c = cls(); db.updateClass(c.id, { is_online: !c.is_online }); render(); }
+  else if (t.id === 'onlineBtn') { const d = ui.date, info = dayInfo(d); setOverride(d, { mode: info.mode === 'chips' ? 'onsite' : 'chips' }).then(render); }
   else if (t.id === 'rotBtn') rotate();
   else if (t.id === 'swapOff') { ui.swap = false; ui.swapFirst = null; render(); }
   else if (t.id === 'menuBtn') openMenu();
@@ -553,8 +563,8 @@ async function boot() {
     return;
   }
   await db.loadAll();
+  try { CAL = await (await fetch('calendar.json?v=' + todayStr())).json(); } catch (e) { console.warn('calendar.json 读取失败', e); }
   if (!store.classes.find(c => c.id === ui.cls)) ui.cls = store.classes[0]?.id;
-  await autoAdvance();
   app.hidden = false; render();
   if (db.DEV) { const b = document.createElement('button'); b.textContent = 'DEV 重置数据'; b.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:9;font-size:11px;opacity:.5'; b.onclick = () => { db.devReset(); location.reload(); }; document.body.appendChild(b); }
 }
