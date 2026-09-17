@@ -42,12 +42,21 @@ svg { display: block; }
 /* ---------- 座位 ---------- */
 .room { padding: 18px 18px 8px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 14px; align-content: start; }
 .room .wb { grid-column: 1 / -1; text-align: center; font-size: 11px; color: var(--mute); letter-spacing: .12em; padding: 6px; background: #eceae4; border-radius: 8px; margin-top: 4px; }
-.grp { display: flex; flex-direction: column; gap: 6px; padding: 8px 8px 8px; border-radius: 14px; background: #ecebe6; box-shadow: inset 0 1px 0 rgba(255,255,255,.7); }
-.grp-label { font-size: 11px; font-weight: 700; color: var(--mute); letter-spacing: .08em; padding: 2px 4px 4px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
-.grp-label::before { content: ""; width: 6px; height: 6px; border-radius: 99px; background: #c9c5ba; }
-.grp-label.head { color: var(--warn); } .grp-label.head::before { background: var(--warn); }
+.grp { display: flex; flex-direction: column; gap: 7px; padding: 8px; border-radius: 16px; background: var(--g-soft, #ecebe6); }
+.grp-label { font-size: 11px; font-weight: 700; color: var(--g-deep, var(--mute)); padding: 0 2px 2px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+.grp-label .short, .grp-label .full { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 8px; background: #fff; font-weight: 800; font-size: 12px; letter-spacing: .02em; }
+.grp-label .full { display: none; }
+.grp-label .short { display: inline-flex; }
+.grp:nth-child(8n+1) { --g-soft: #e3f4ee; --g-deep: #1f7a5c; }
+.grp:nth-child(8n+2) { --g-soft: #e4eefb; --g-deep: #2b62b8; }
+.grp:nth-child(8n+3) { --g-soft: #ece8fa; --g-deep: #5b48a8; }
+.grp:nth-child(8n+4) { --g-soft: #fdebe0; --g-deep: #b8562a; }
+.grp:nth-child(8n+5) { --g-soft: #f8f2d6; --g-deep: #8a6b12; }
+.grp:nth-child(8n+6) { --g-soft: #fbe6ec; --g-deep: #b02f5a; }
+.grp:nth-child(8n+7) { --g-soft: #e8f1de; --g-deep: #4e7a24; }
+.grp:nth-child(8n+8) { --g-soft: #f1ece0; --g-deep: #7a5a2a; }
 .grp-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-.card { position: relative; background: var(--card); border: 1px solid rgba(0,0,0,.04); border-radius: 11px; padding: 10px 6px 9px; display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 74px; overflow: hidden; cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; box-shadow: 0 1px 2px rgba(28,27,25,.06), 0 4px 10px -6px rgba(28,27,25,.12); }
+.card { position: relative; background: var(--card); border: none; border-radius: 12px; padding: 10px 6px 9px; display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 74px; overflow: hidden; cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; box-shadow: 0 1px 2px rgba(28,27,25,.05); }
 .card:active { transform: scale(.95); box-shadow: 0 0 0 rgba(0,0,0,0); }
 @media (hover: hover) { .card:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(28,27,25,.08), 0 10px 20px -10px rgba(28,27,25,.2); } }
 .card .sc.pop { animation: pop .45s cubic-bezier(.2,.9,.3,1.4); }
@@ -63,7 +72,13 @@ svg { display: block; }
 .card .sc { font-size: 20px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .card .sub { font-size: 10px; color: var(--mute); }
 .card .dot { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 99px; }
-.card .bar { position: absolute; left: 10px; right: 10px; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--blue); }
+.card.monitor { box-shadow: 0 0 0 2px #f2c14e, 0 1px 2px rgba(28,27,25,.05); }
+.card .mon { position: absolute; top: 5px; left: 6px; font-size: 9px; font-weight: 800; color: #8a6b12; background: #fbecc0; padding: 1px 5px; border-radius: 6px; letter-spacing: .04em; }
+.row .mon { font-size: 10px; font-weight: 800; color: #8a6b12; background: #fbecc0; padding: 1px 6px; border-radius: 6px; margin-left: 6px; vertical-align: 1px; }
+.card .bar { position: absolute; inset: 0; border-radius: inherit; padding: 3px; pointer-events: none;
+  background: linear-gradient(to top, var(--blue) 0%, var(--blue) 18%, rgba(47,111,237,.55) 42%, rgba(47,111,237,0) 68%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude; }
 .chip { font-size: 10px; padding: 1px 6px; border-radius: 99px; font-weight: 600; white-space: nowrap; }
 .chip.warn { background: var(--warn-soft); color: var(--warn); }
 .chip.bad { background: var(--bad-soft); color: var(--bad); }
@@ -168,10 +183,6 @@ svg { display: block; }
 .cal-d.today { outline: 2px solid var(--ink); outline-offset: -2px; }
 .cal-d:disabled { cursor: default; }
 
-/* 组名：手机只显示短名 */
-.grp-label .short { display: none; }
-@media (max-width: 760px) { .grp-label .short { display: inline; } }
-
 /* ---------- 底部班级栏（手机） ---------- */
 .tabbar { display: none; }
 
@@ -186,16 +197,16 @@ svg { display: block; }
   /* 竖屏手机：4×2 迷你座位图，只留名字 */
   .room { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 10px 6px 6px; gap: 10px 4px; }
   .grp { padding: 4px 3px 4px; gap: 3px; border-radius: 10px; }
-  .grp-label { font-size: 10px; padding: 0 2px 2px; letter-spacing: 0; gap: 4px; }
-  .grp-label::before { width: 5px; height: 5px; }
-  .grp-label .full { display: none; }
+  .grp-label { padding: 0 0 2px; gap: 4px; }
+  .grp-label .short { min-width: 20px; height: 20px; font-size: 11px; padding: 0 5px; border-radius: 6px; }
+  .card .mon { font-size: 8px; top: 3px; left: 3px; padding: 0 4px; }
   .grp-grid { gap: 3px; }
   .card { min-height: 54px; padding: 6px 1px 7px; border-radius: 8px; gap: 0; }
   .card .nm { font-size: 11px; letter-spacing: -.04em; max-width: 100%; }
   .card.head .nm { font-size: 12px; }
   .card .sc, .card .chip, .card .sub { display: none; }
   .card .dot { top: 4px; right: 4px; width: 6px; height: 6px; }
-  .card .bar { left: 6px; right: 6px; }
+  .card .bar { padding: 2px; }
   .card.absent .nm { text-decoration: line-through; }
   .list { margin: 10px 12px; }
   .row { grid-template-columns: 28px 1fr 60px 44px; gap: 8px; padding: 12px; }
