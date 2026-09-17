@@ -1,0 +1,7 @@
+# 真实学生数据，只留在本机
+site/dev-seed.json
+migrate/snapshot_*.json
+migrate/sheet_*.csv
+supabase/seed.sql
+design/*.html
+.DS_Store
