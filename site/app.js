@@ -61,6 +61,8 @@ const prevExams = sid => { const t = prevTerm(); return t ? store.exams.filter(e
 const risk = sid => { const g = prevExams(sid).map(e => e.grade); return g.includes('F') ? 'F' : g.includes('D') ? 'D' : null; };
 const attOf = (sid, date) => store.attendance.find(a => a.student_id === sid && a.on_date === date);
 const isMonitor = sid => ((S().monitors || {})[stuById(sid)?.class_id]) === sid;
+// 分数颜色：只给两端上色——A/A+ 绿、F 红，中间黑
+const gradeCls = sc => { const g = gradeOf(sc); return g === 'A+' || g === 'A' ? 'g-hi' : g === 'F' ? 'g-lo' : ''; };
 const gradeOf = sc => { const th = S().grade_thresholds || []; return (th.find(t => sc >= t.min) || th[th.length - 1] || { label: '' }).label; };
 
 function attText(a, which) { // which: 'att' | 'cam'
@@ -108,7 +110,7 @@ function card(sid) {
   const abs = a && a.flags.includes('absent');
   return `<div class="card ${abs ? 'absent' : ''} ${visible(sid) ? '' : 'dim'} ${ui.swapFirst === sid ? 'sel' : ''} ${isMonitor(sid) ? 'monitor' : ''}" data-id="${sid}">
     ${isMonitor(sid) ? '<span class="mon">班长</span>' : ''}${r ? `<span class="dot ${r === 'F' ? 'bad' : 'warn'}"></span>` : ''}
-    <div class="nm">${h(s.name)}</div><div class="sc">${score(sid)}</div>
+    <div class="nm">${h(s.name)}</div><div class="sc ${gradeCls(score(sid))}">${score(sid)}</div>
     ${attChip(a) || `<span class="sub">${pad(s.num ?? '')}</span>`}
     ${called(sid) === 0 ? '<span class="bar"></span>' : ''}</div>`;
 }
@@ -149,7 +151,7 @@ function rowHtml(s, date, online) {
         <button class="ab ${flags.includes('camera_off') ? 'on purple' : ''}" data-att="camera_off">摄像头</button>
         <button class="ab ${flags.includes('no_response') ? 'on purple' : ''}" data-att="no_response">无回应${flags.includes('no_response') && a.noresp_time ? '<small>' + a.noresp_time + '</small>' : ''}</button></span>`
     : `<span class="c-att" style="font-size:12px;color:${flags.length ? 'var(--warn)' : 'var(--mute)'}">${[...attText(a, 'att'), ...attText(a, 'cam')].join(', ') || '出勤'}</span>`;
-  return `<div class="row ${visible(s.id) ? '' : 'dim'} ${flags.includes('absent') ? 'absent' : ''}" data-id="${s.id}"><span class="num">${pad(s.num ?? '')}</span><span class="nm">${h(s.name)}${isMonitor(s.id) ? '<span class="mon">班长</span>' : ''}${r ? ` <span class="dot ${r === 'F' ? 'bad' : 'warn'}" style="position:static;display:inline-block;margin-left:4px"></span>` : ''}</span><span class="eng">${h(s.eng_name || '')}</span><span class="sc">${score(s.id)}</span><span>${r ? `<span class="tag ${r === 'F' ? 'bad' : 'warn'}">${r}</span>` : '<span class="tag mute">—</span>'}</span><span class="c-call">${n === 0 ? '<span class="tag blue">0</span>' : `<b>${n}</b>`}</span>${attCell}</div>`;
+  return `<div class="row ${visible(s.id) ? '' : 'dim'} ${flags.includes('absent') ? 'absent' : ''}" data-id="${s.id}"><span class="num">${pad(s.num ?? '')}</span><span class="nm">${h(s.name)}${isMonitor(s.id) ? '<span class="mon">班长</span>' : ''}${r ? ` <span class="dot ${r === 'F' ? 'bad' : 'warn'}" style="position:static;display:inline-block;margin-left:4px"></span>` : ''}</span><span class="eng">${h(s.eng_name || '')}</span><span class="sc ${gradeCls(score(s.id))}">${score(s.id)}</span><span>${r ? `<span class="tag ${r === 'F' ? 'bad' : 'warn'}">${r}</span>` : '<span class="tag mute">—</span>'}</span><span class="c-call">${n === 0 ? '<span class="tag blue">0</span>' : `<b>${n}</b>`}</span>${attCell}</div>`;
 }
 function attStats(cid, date) {
   const cnt = { absent: 0, late: 0, camera_off: 0, no_response: 0 };
