@@ -53,7 +53,9 @@ const isOnline = (date = ui.date) => dayInfo(date).mode === 'chips';
 const dayLabel = info => info.day === 0 ? 'D0 · 停课' : info.day ? 'D' + info.day : (info.src === 'school' ? '放假' : '未排');
 const modeLabel = m => m === 'chips' ? '线上 · Zoom' : m === 'pal' ? 'PAL · 异步' : m === 'onsite' ? '到校' : '';
 const termEvents = sid => store.events.filter(e => e.student_id === sid && e.term === term());
-const score = sid => 100 + termEvents(sid).reduce((a, e) => a + (e.kind === 'score' ? e.delta : 0), 0);
+// 每学季起始分：Q1 = 100；Q2 起 = 60（2026-09-18 会议决定）。可在 cls_settings.base_score 里按学季覆盖
+const baseScore = (t = term()) => { const b = S().base_score || {}; return b[t] ?? (t === 'Q1' ? 100 : 60); };
+const score = sid => baseScore() + termEvents(sid).reduce((a, e) => a + (e.kind === 'score' ? e.delta : 0), 0);
 const called = sid => termEvents(sid).filter(e => e.kind === 'called' || (e.kind === 'score' && e.delta > 0)).length;
 const prevExams = sid => { const t = prevTerm(); return t ? store.exams.filter(e => e.student_id === sid && e.term === t) : []; };
 const risk = sid => { const g = prevExams(sid).map(e => e.grade); return g.includes('F') ? 'F' : g.includes('D') ? 'D' : null; };
@@ -211,7 +213,7 @@ function openPanel(sid) {
   $('#overlay').innerHTML = `<div class="dim-bg" id="panelBg"></div><div class="sheet">
     <div class="sheet-hd">
       <div><div class="name">${h(s.name)} <span class="meta">${pad(s.num ?? '')} · ${h(s.eng_name || '')}</span></div>
-        <div class="meta">${isMonitor(sid) ? '<span class="mon">班长</span> · ' : ''}${term()} 点名 <b style="color:var(--ink)">${called(sid)}</b> 次${pt ? ` · ${pt} 总分 ${100 + store.events.filter(e => e.student_id === sid && e.term === pt && e.kind === 'score').reduce((x, e) => x + e.delta, 0)}` : ''}</div></div>
+        <div class="meta">${isMonitor(sid) ? '<span class="mon">班长</span> · ' : ''}${term()} 点名 <b style="color:var(--ink)">${called(sid)}</b> 次${pt ? ` · ${pt} 总分 ${baseScore(pt) + store.events.filter(e => e.student_id === sid && e.term === pt && e.kind === 'score').reduce((x, e) => x + e.delta, 0)}` : ''}</div></div>
       <div class="grow"></div>
       <div style="display:flex;align-items:baseline;gap:8px"><span class="score">${sc}</span><span class="tag ${sc < 74 ? 'warn' : ''}" style="background:var(--green-soft);color:var(--green)">${h(gradeOf(sc))}</span></div>
       <button class="icon-btn" id="panelMon" title="班长" style="font-size:11px;font-weight:800;color:${isMonitor(sid) ? '#8a6b12' : 'var(--mute)'};background:${isMonitor(sid) ? '#fbecc0' : '#fff'}">班长</button>
@@ -527,7 +529,7 @@ function openGradeEditor() {
 }
 function openNewTerm() {
   const n = parseInt(term().slice(1)) + 1, next = 'Q' + n;
-  modal(`<h3>开始 ${next}</h3><div class="hint">所有人分数回到 100，点名次数归零；${term()} 的分数、记录、成绩全部保留，成为「上季度」。这一步可以在菜单里再切回去。</div>
+  modal(`<h3>开始 ${next}</h3><div class="hint">所有人分数回到 ${baseScore(next)}，点名次数归零；${term()} 的分数、记录、成绩全部保留，成为「上季度」。这一步可以在菜单里再切回去。</div>
     <div class="sec">${next} 开始日期</div><input type="date" id="ntDate" value="${todayStr()}">
     <button class="mbtn primary" id="ntOk">确认开始 ${next}</button><button class="mbtn" id="mClose">取消</button>`);
   $('#ntOk').onclick = async () => { const ts = { ...(S().term_starts || {}), [next]: $('#ntDate').value }; await db.setSetting('term_starts', ts); await db.setSetting('current_term', next); closeModal(); toast(`已开始 ${next}`); render(); };
