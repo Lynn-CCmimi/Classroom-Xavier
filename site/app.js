@@ -573,6 +573,11 @@ document.addEventListener('click', e => {
   else if (t.id === 'menuBtn') openMenu();
 });
 
+window.addEventListener('cls-save-error', () => {
+  const el = $('#toast'); el.innerHTML = '<span style="color:#ffb4b4">⚠ 保存失败，这一下没记上——检查网络后重做</span>'; el.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, 5000);
+});
+
 // ---------- 启动 ----------
 async function boot() {
   const app = $('#app'), login = $('#login');

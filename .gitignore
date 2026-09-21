@@ -5,3 +5,4 @@ migrate/sheet_*.csv
 supabase/seed.sql
 design/*.html
 .DS_Store
+supabase/delta_*.sql
