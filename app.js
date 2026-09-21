@@ -60,6 +60,8 @@ const called = sid => termEvents(sid).filter(e => e.kind === 'called' || (e.kind
 const prevExams = sid => { const t = prevTerm(); return t ? store.exams.filter(e => e.student_id === sid && e.term === t) : []; };
 const risk = sid => { const g = prevExams(sid).map(e => e.grade); return g.includes('F') ? 'F' : g.includes('D') ? 'D' : null; };
 const attOf = (sid, date) => store.attendance.find(a => a.student_id === sid && a.on_date === date);
+const isLeader = sid => { const st = stuById(sid); return !!st && ((S().leaders || {})[st.class_id] || []).includes(sid); };
+const groupOf = sid => { const c = cls(); return c ? c.groups.findIndex(g => g.student_ids.includes(sid)) : -1; };
 const isMonitor = sid => ((S().monitors || {})[stuById(sid)?.class_id]) === sid;
 // 分数颜色：只给两端上色——A/A+ 绿、F 红，中间黑
 const gradeCls = sc => { const g = gradeOf(sc); return g === 'A+' || g === 'A' ? 'g-hi' : g === 'F' ? 'g-lo' : ''; };
@@ -108,8 +110,8 @@ function card(sid) {
   const s = stuById(sid); if (!s) return '<div class="card"></div>';
   const c = cls(); const a = attOf(sid, classDate(c)); const r = risk(sid);
   const abs = a && a.flags.includes('absent');
-  return `<div class="card ${abs ? 'absent' : ''} ${visible(sid) ? '' : 'dim'} ${ui.swapFirst === sid ? 'sel' : ''} ${isMonitor(sid) ? 'monitor' : ''}" data-id="${sid}">
-    ${isMonitor(sid) ? '<span class="mon">班长</span>' : ''}${r ? `<span class="dot ${r === 'F' ? 'bad' : 'warn'}"></span>` : ''}
+  return `<div class="card ${abs ? 'absent' : ''} ${visible(sid) ? '' : 'dim'} ${ui.swapFirst === sid ? 'sel' : ''} ${isMonitor(sid) ? 'monitor' : ''} ${isLeader(sid) ? 'leader' : ''}" data-id="${sid}">
+    ${isMonitor(sid) ? '<span class="mon">班长</span>' : isLeader(sid) ? '<span class="mon ld">组长</span>' : ''}${r ? `<span class="dot ${r === 'F' ? 'bad' : 'warn'}"></span>` : ''}
     <div class="nm">${h(s.name)}</div><div class="sc ${gradeCls(score(sid))}">${score(sid)}</div>
     ${attChip(a) || `<span class="sub">${pad(s.num ?? '')}</span>`}
     ${called(sid) === 0 ? '<span class="bar"></span>' : ''}</div>`;
@@ -151,7 +153,7 @@ function rowHtml(s, date, online) {
         <button class="ab ${flags.includes('camera_off') ? 'on purple' : ''}" data-att="camera_off">摄像头</button>
         <button class="ab ${flags.includes('no_response') ? 'on purple' : ''}" data-att="no_response">无回应${flags.includes('no_response') && a.noresp_time ? '<small>' + a.noresp_time + '</small>' : ''}</button></span>`
     : `<span class="c-att" style="font-size:12px;color:${flags.length ? 'var(--warn)' : 'var(--mute)'}">${[...attText(a, 'att'), ...attText(a, 'cam')].join(', ') || '出勤'}</span>`;
-  return `<div class="row ${visible(s.id) ? '' : 'dim'} ${flags.includes('absent') ? 'absent' : ''}" data-id="${s.id}"><span class="num">${pad(s.num ?? '')}</span><span class="nm">${h(s.name)}${isMonitor(s.id) ? '<span class="mon">班长</span>' : ''}${r ? ` <span class="dot ${r === 'F' ? 'bad' : 'warn'}" style="position:static;display:inline-block;margin-left:4px"></span>` : ''}</span><span class="eng">${h(s.eng_name || '')}</span><span class="sc ${gradeCls(score(s.id))}">${score(s.id)}</span><span>${r ? `<span class="tag ${r === 'F' ? 'bad' : 'warn'}">${r}</span>` : '<span class="tag mute">—</span>'}</span><span class="c-call">${n === 0 ? '<span class="tag blue">0</span>' : `<b>${n}</b>`}</span>${attCell}</div>`;
+  return `<div class="row ${visible(s.id) ? '' : 'dim'} ${flags.includes('absent') ? 'absent' : ''}" data-id="${s.id}"><span class="num">${pad(s.num ?? '')}</span><span class="nm">${h(s.name)}${isMonitor(s.id) ? '<span class="mon">班长</span>' : ''}${isLeader(s.id) ? '<span class="mon ld">组长</span>' : ''}${r ? ` <span class="dot ${r === 'F' ? 'bad' : 'warn'}" style="position:static;display:inline-block;margin-left:4px"></span>` : ''}</span><span class="eng">${h(s.eng_name || '')}</span><span class="sc ${gradeCls(score(s.id))}">${score(s.id)}</span><span>${r ? `<span class="tag ${r === 'F' ? 'bad' : 'warn'}">${r}</span>` : '<span class="tag mute">—</span>'}</span><span class="c-call">${n === 0 ? '<span class="tag blue">0</span>' : `<b>${n}</b>`}</span>${attCell}</div>`;
 }
 function attStats(cid, date) {
   const cnt = { absent: 0, late: 0, camera_off: 0, no_response: 0 };
@@ -215,9 +217,10 @@ function openPanel(sid) {
   $('#overlay').innerHTML = `<div class="dim-bg" id="panelBg"></div><div class="sheet">
     <div class="sheet-hd">
       <div><div class="name">${h(s.name)} <span class="meta">${pad(s.num ?? '')} · ${h(s.eng_name || '')}</span></div>
-        <div class="meta">${isMonitor(sid) ? '<span class="mon">班长</span> · ' : ''}${term()} 点名 <b style="color:var(--ink)">${called(sid)}</b> 次${pt ? ` · ${pt} 总分 ${baseScore(pt) + store.events.filter(e => e.student_id === sid && e.term === pt && e.kind === 'score').reduce((x, e) => x + e.delta, 0)}` : ''}</div></div>
+        <div class="meta">${isMonitor(sid) ? '<span class="mon">班长</span> · ' : ''}${isLeader(sid) ? '<span class="mon ld">组长</span> · ' : ''}${term()} 点名 <b style="color:var(--ink)">${called(sid)}</b> 次${pt ? ` · ${pt} 总分 ${baseScore(pt) + store.events.filter(e => e.student_id === sid && e.term === pt && e.kind === 'score').reduce((x, e) => x + e.delta, 0)}` : ''}</div></div>
       <div class="grow"></div>
       <div style="display:flex;align-items:baseline;gap:8px"><span class="score">${sc}</span><span class="tag ${sc < 74 ? 'warn' : ''}" style="background:var(--green-soft);color:var(--green)">${h(gradeOf(sc))}</span></div>
+      <button class="icon-btn" id="panelLd" title="组长" style="font-size:11px;font-weight:800;color:${isLeader(sid) ? 'var(--acc)' : 'var(--mute)'};background:${isLeader(sid) ? 'var(--acc-soft)' : '#fff'}">组长</button>
       <button class="icon-btn" id="panelMon" title="班长" style="font-size:11px;font-weight:800;color:${isMonitor(sid) ? '#8a6b12' : 'var(--mute)'};background:${isMonitor(sid) ? '#fbecc0' : '#fff'}">班长</button>
       <button class="icon-btn" id="panelClose">${ICON.x}</button>
     </div>
@@ -242,6 +245,12 @@ function openPanel(sid) {
       <div>${recs.length ? recs.map(e => `<div class="rec"><span class="d">${e.on_date ? e.on_date.slice(5).replace('-', '/') : 'D' + (e.day || '?')}</span><span class="v ${e.kind === 'called' ? 'call' : e.delta > 0 ? 'pos' : 'neg'}">${e.kind === 'called' ? '点名' : (e.delta > 0 ? '+' : '') + e.delta}</span><span class="r">${h(e.reason || '')}</span><button class="x" data-del="${e.id}">删</button></div>`).join('') : '<div style="font-size:12px;color:var(--mute);padding:6px 0">还没有记录</div>'}</div>
     </div></div></div>`;
   $('#panelBg').onclick = closePanel; $('#panelClose').onclick = closePanel;
+  $('#panelLd').onclick = async () => {
+    const all = { ...(S().leaders || {}) }; let arr = [...(all[s.class_id] || [])];
+    if (arr.includes(sid)) { arr = arr.filter(x => x !== sid); toast('已取消组长'); }
+    else { const gi = groupOf(sid); const c = cls(); const mates = gi >= 0 ? c.groups[gi].student_ids : []; arr = arr.filter(x => !mates.includes(x)); arr.push(sid); toast(`${s.name} 设为${gi >= 0 ? c.groups[gi].name : ''}组长`); }
+    all[s.class_id] = arr; await db.setSetting('leaders', all); render(); openPanel(sid);
+  };
   $('#panelMon').onclick = async () => { const m = { ...(S().monitors || {}) }; if (m[s.class_id] === sid) delete m[s.class_id]; else m[s.class_id] = sid; await db.setSetting('monitors', m); toast(m[s.class_id] === sid ? `${s.name} 设为班长` : '已取消班长'); render(); openPanel(sid); };
   const sheet = $('#overlay .sheet');
   sheet.querySelectorAll('[data-delta]').forEach(b => b.onclick = () => addScore(sid, parseInt(b.dataset.delta), b.dataset.reason, true));
