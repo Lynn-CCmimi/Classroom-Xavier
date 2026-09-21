@@ -495,11 +495,14 @@ function openOldImport() {
     try {
       const snap = JSON.parse($('#oldTxt').value); if (!snap.classes) throw new Error('格式不对');
       const t = $('#oldTerm').value; const evs = [], atts = [];
+      // 旧记录只有 D 几；只有映射出的日期落在该学季内才记日期，否则留空
+      const ts = S().term_starts || {}; const nextStart = ts['Q' + (parseInt(t.slice(1)) + 1)] || '9999-12-31'; const thisStart = ts[t] || '0000-01-01';
+      const dateFor = (dd, d) => { const x = dd[d]; return x && x >= thisStart && x < nextStart ? x : null; };
       for (const [cid, c] of Object.entries(snap.classes)) {
         const dd = c.dayDates || {};
         for (const [sid, s] of Object.entries(c.students)) {
           if (!stuById(sid)) continue;
-          (s.records || []).forEach(r => evs.push({ id: crypto.randomUUID(), student_id: sid, class_id: cid, term: t, kind: 'score', delta: r.delta | 0, reason: r.desc || '', day: r.day || null, on_date: dd[r.day] || null, created_at: (dd[r.day] || '2026-08-01') + 'T08:00:00Z' }));
+          (s.records || []).forEach(r => evs.push({ id: crypto.randomUUID(), student_id: sid, class_id: cid, term: t, kind: 'score', delta: r.delta | 0, reason: r.desc || '', day: r.day || null, on_date: dateFor(dd, r.day), created_at: (dateFor(dd, r.day) || thisStart) + 'T08:00:00Z' }));
           for (const [d, v] of Object.entries(s.attendanceLog || {})) {
             if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !v) continue;
             let flags = [], late_time = null, noresp_time = null;
