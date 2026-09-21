@@ -72,9 +72,15 @@ export function devReset() { localStorage.removeItem(DEV_KEY); }
 // ---------- 写 ----------
 async function run(fn) {
   if (DEV) { devSave(); return; }
-  const db = await sb();
-  const { error } = await fn(db);
-  if (error) { console.error(error); throw error; }
+  try {
+    const db = await sb();
+    const { error } = await fn(db);
+    if (error) throw error;
+  } catch (e) {
+    console.error(e);
+    window.dispatchEvent(new CustomEvent('cls-save-error', { detail: e }));
+    throw e;
+  }
 }
 
 export async function addEvent(e) {
