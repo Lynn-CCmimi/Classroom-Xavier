@@ -6,3 +6,4 @@ supabase/seed.sql
 design/*.html
 .DS_Store
 supabase/delta_*.sql
+supabase/seed_backup.sql
