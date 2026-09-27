@@ -43,11 +43,16 @@ for ln in lines:
         if re.search(r'DAY\s*\d\s*-\s*NO CLASSES', up): day = 0
         mode = None
         head = up[:60]
-        if re.search(r'JHS\s*-\s*PAL', up) or re.search(r'PAL FOR JHS', up) or re.search(r'\bPAL\b', head): mode = 'pal'
+        # 紧挨 DAY 标记的方式优先（如 "DAY 2 ONSITEG9 PAL TESTING" 里的 PAL 是活动名）
+        pm = re.match(r'[\s(]*(?:(?:ONSITE|PAL|CHIPS|JHS|SHS)\W*)*DAY\s*\d\s*(?:\([^)]*\)\s*)*(?:ONSITE|CHIPS|PAL(?![A-Z]))?', up)
+        mk = re.search(r'ONSITE|PAL|CHIPS', pm.group(0)) if pm else None
+        if re.search(r'JHS\s*-\s*PAL', up): mode = 'pal'
+        elif mk: mode = mk.group(0).lower()
+        elif re.search(r'PAL FOR JHS', up) or re.search(r'\bPAL\b', head): mode = 'pal'
         elif re.search(r'\bCHIPS\b', head): mode = 'chips'
         elif re.search(r'\bONSITE\b', head): mode = 'onsite'
         note = re.sub(r'^\(?(JHS|SHS)[^)]*\)?', '', rest)
-        note = re.sub(r'^(ONSITE|PAL|CHIPS)?\s*DAY\s*\d\s*(\(\w+\))?\s*(- NO CLASSES)?\s*\??\??', '', note).strip()
+        note = re.sub(r'^(ONSITE|PAL|CHIPS)?\s*DAY\s*\d\s*(\(\w+\))?\s*(ONSITE)?\s*(- NO CLASSES)?\s*\??\??', '', note).strip()
         note = re.split(r'(?<=[a-z\)])(?=[A-Z])', note)[0][:60]
         cal[date.isoformat()] = {'day': day, 'mode': mode, 'note': note}
 
