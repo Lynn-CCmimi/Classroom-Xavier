@@ -280,7 +280,7 @@ function settingsTab(body, cfg) {
     <section><h4>学生自查</h4>
       <div class="hint">学生在 <b>${X.h(studentUrl)}</b> 选班级，输入学号、中文名和个人码，只能看到<b>当前学季</b>自己的课堂分，以及你在“录分”里设为「对学生可见」的单项考试成绩（👁）。看不到综评、总评 / Final grade、Conduct / Effort / PTC / Green Slip / 笔记抽检，也看不到以前的学季。连续输错 5 次锁 15 分钟。</div>
       <label class="tgl"><input type="checkbox" id="viewOn" ${viewOn ? 'checked' : ''}> 对 ${X.h(X.className)} 开放学生查询${viewOn ? '' : '（现在是关闭的，学生查不到）'}</label>
-      <div class="inline"><button class="btn" id="pinGen">给没有个人码的人生成（${stus.length - pinned} 人）</button><button class="btn" id="pinCopy" ${pinned ? '' : 'disabled'}>复制 学号/姓名/个人码</button><button class="btn red" id="pinAll">全部重新生成</button></div>
+      <div class="inline"><button class="btn" id="pinGen">给没有个人码的人生成（${stus.length - pinned} 人）</button><button class="btn" id="pinCopy" ${pinned ? '' : 'disabled'}>复制 学号/姓名/个人码</button><button class="btn primary" id="pinNotice" ${pinned ? '' : 'disabled'}>生成给学生的通知</button><button class="btn red" id="pinAll">全部重新生成</button></div>
       <div class="hint">已有个人码 ${pinned} / ${stus.length}。个人码只有你能看到，复制出来发给学生本人。</div></section>
     <section><h4>Conduct / Effort / PTC 建议规则</h4>
       <div class="hint">这些只是“建议”的依据，最终以你在“表现”里选的为准。课堂分用的是本季相对起始分（${X.baseScore()}）的变化。</div>
@@ -309,6 +309,7 @@ function settingsTab(body, cfg) {
   };
   body.querySelector('#pinGen').onclick = () => gen(false);
   body.querySelector('#pinAll').onclick = () => { if (confirm('全部重新生成会让学生手里的旧个人码失效。继续？')) gen(true); };
+  body.querySelector('#pinNotice').onclick = () => studentNotices(stus, studentUrl);
   body.querySelector('#pinCopy').onclick = () => navigator.clipboard.writeText(['学号\t姓名\t个人码', ...stus.map(s => `${s.num ?? ''}\t${s.name}\t${s.pin || ''}`)].join('\n')).then(() => X.toast('已复制'), () => X.toast('复制失败'));
   const setPath = (o, path, v) => { const k = path.split('.'); let t = o; k.slice(0, -1).forEach(x => t = t[x]); t[k[k.length - 1]] = v; };
   body.querySelector('#ruSave').onclick = async () => {
@@ -345,4 +346,30 @@ function drawWeights(body, cfg) {
   };
   draw();
   body.querySelector('#wtSave').onclick = async () => { await saveCfg(work); X.toast('占比已保存'); X.rerender(); };
+}
+
+// 每个学生一段完整的中英双语通知（网址 + 登录要填的每一项）
+function studentNotice(s, url) {
+  return `【成绩查询 Grade Check】
+网址 Link: ${url}
+请按下面填写 Please enter:
+班级 Class: ${X.className}
+学号 Number: ${s.num ?? ''}
+中文名 Chinese name: ${s.name}
+个人码 Personal code: ${s.pin}
+
+这是你自己的个人码，不要告诉同学。This code is only for you. Please do not share it.
+可以查看 You can see: 课堂分 class points + 老师公布的单项成绩 released test results.
+总评 Final grade 由学校成绩系统统一公布。Final grades are published by the school system.
+连续输错 5 次会锁 15 分钟。5 wrong tries lock you out for 15 minutes.`;
+}
+function studentNotices(stus, url) {
+  const list = stus.filter(s => s.pin);
+  X.modal(`<h3>给学生的通知 · ${X.h(X.className)}</h3><div class="hint">每人一段，点「复制」再粘贴到私信里发给本人。别发到班级群，个人码只有本人能知道。${list.length < stus.length ? ` 还有 ${stus.length - list.length} 人没有个人码，先回设置里生成。` : ''}</div>
+    <button class="mbtn blue" id="ntAll">复制全班（每人一段，中间用分隔线隔开）</button>
+    ${list.map(s => `<div class="rep-block"><div class="t"><span>${s.num ?? ''} ${X.h(s.name)}</span><button class="mbtn blue" data-nt="${s.id}" style="width:auto;padding:6px 14px;min-height:34px">复制</button></div><pre>${X.h(studentNotice(s, url))}</pre></div>`).join('')}
+    <button class="mbtn" id="mClose">关闭</button>`, true);
+  const copy = (t, msg) => navigator.clipboard.writeText(t).then(() => X.toast(msg), () => X.toast('复制失败'));
+  document.getElementById('ntAll').onclick = () => copy(list.map(s => `${s.num ?? ''} ${s.name}\n${studentNotice(s, url)}`).join('\n\n----------------\n\n'), '已复制全班');
+  document.querySelectorAll('[data-nt]').forEach(b => b.onclick = () => copy(studentNotice(list.find(s => s.id === b.dataset.nt), url), '已复制'));
 }
