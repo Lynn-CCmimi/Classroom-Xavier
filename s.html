@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>成绩查询</title>
+<link rel="stylesheet" href="s.css">
+<script src="config.js"></script>
+</head>
+<body>
+<main id="m">
+  <form id="f" class="card">
+    <h1>成绩查询 <small>Grade Check</small></h1>
+    <label>班级 Class<select id="cls"><option value="G9E">9E</option><option value="10A">10A</option><option value="10H">10H</option></select></label>
+    <label>学号 Number<input id="num" inputmode="numeric" autocomplete="off"></label>
+    <label>中文名 Chinese name<input id="nm" autocomplete="off"></label>
+    <label>个人码 Personal code<input id="pin" type="password" inputmode="numeric" autocomplete="off"></label>
+    <div class="err" id="err"></div>
+    <button type="submit">查看 View</button>
+  </form>
+  <div id="out" hidden></div>
+</main>
+<script type="module" src="s.js"></script>
+</body>
+</html>
