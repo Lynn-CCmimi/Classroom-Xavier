@@ -1,5 +1,6 @@
 import * as db from './db.js';
 const { store } = db;
+import { renderGradebook } from './gradebook.js';
 
 // ---------- 小工具 ----------
 const $ = s => document.querySelector(s);
@@ -98,7 +99,7 @@ function renderHeader() {
     ${c.id === 'G9E' ? `<button class="hbtn" id="rotBtn">${ICON.rot}轮转</button>` : ''}
     ${ui.swap ? `<button class="hbtn warn" id="swapOff">换座中 · 退出</button>` : ''}
     <div class="grow"></div>
-    <div class="seg"><button data-view="seat" class="${ui.view === 'seat' ? 'on' : ''}">座位</button><button data-view="list" class="${ui.view === 'list' ? 'on' : ''}">名单</button></div>
+    <div class="seg"><button data-view="seat" class="${ui.view === 'seat' ? 'on' : ''}">座位</button><button data-view="list" class="${ui.view === 'list' ? 'on' : ''}">名单</button><button data-view="grades" class="${ui.view === 'grades' ? 'on' : ''}">成绩</button></div>
     <button class="pill bad ${ui.filter === 'F' ? 'on' : ''}" data-filter="F">有 F · ${nF}</button>
     <button class="pill blue ${ui.filter === 'zero' ? 'on' : ''}" data-filter="zero">${term()} 0 次 · ${nZero}</button>
     <button class="icon-btn" id="menuBtn">${ICON.menu}</button>`;
@@ -127,6 +128,10 @@ function groupBlock(g, gi, layout) {
 function renderMain() {
   const c = cls(); if (!c) return;
   const m = $('#main');
+  if (ui.view === 'grades') {
+    renderGradebook(m, { db, store, h, toast, modal, closeModal, classId: c.id, className: c.name, term: term(), students: () => classStudents(c.id), score, baseScore: () => baseScore(), rerender: render, today: todayStr });
+    return;
+  }
   if (ui.view === 'seat') {
     let order = c.groups.map((_, i) => i);
     if (c.id === 'G9E' && c.position_to_group) order = c.position_to_group;

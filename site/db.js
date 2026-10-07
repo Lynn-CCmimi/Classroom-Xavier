@@ -5,7 +5,7 @@ const CONFIG = window.CLASSROOM_CONFIG || {};
 export const DEV = location.protocol === 'file:' || /[?&]dev\b/.test(location.search);
 const DEV_KEY = 'cls_dev_store_v1';
 
-export const store = { classes: [], students: [], events: [], attendance: [], exams: [], settings: {} };
+export const store = { classes: [], students: [], events: [], attendance: [], exams: [], settings: {}, marks: [], reports: [], gbReady: true };
 
 let client = null;
 async function sb() {
@@ -53,7 +53,7 @@ export async function loadAll() {
   if (DEV) {
     const saved = localStorage.getItem(DEV_KEY);
     const src = saved ? JSON.parse(saved) : await (await fetch('dev-seed.json')).json();
-    Object.assign(store, src);
+    Object.assign(store, { marks: [], reports: [] }, src);
     store.events.forEach((e, i) => { if (!e.id) e.id = 'dev_' + i; if (!e.created_at) e.created_at = (e.on_date || '2026-08-01') + 'T08:00:00Z'; });
     store.attendance.forEach((a, i) => { if (!a.id) a.id = 'deva_' + i; });
     return;
@@ -64,6 +64,9 @@ export async function loadAll() {
   ]);
   Object.assign(store, { classes, students, events, attendance, exams });
   store.settings = Object.fromEntries(settings.map(r => [r.key, r.value]));
+  // 成绩簿新表：还没跑 gradebook.sql 时不能拖垮整个页面
+  try { [store.marks, store.reports] = await Promise.all([fetchAll('cls_marks'), fetchAll('cls_term_report')]); store.gbReady = true; }
+  catch (e) { console.warn('成绩簿表未就绪（请先在 Supabase 跑 supabase/gradebook.sql）', e); store.marks = []; store.reports = []; store.gbReady = false; }
 }
 
 function devSave() { if (DEV) localStorage.setItem(DEV_KEY, JSON.stringify(store)); }
@@ -144,4 +147,64 @@ export async function bulkUpsertAttendance(rows) {
 }
 export async function addBackup(label, payload) {
   await run(db => db.from('cls_backups').insert({ label, payload }));
+}
+
+// ---------- 成绩簿 ----------
+// 一个格 = 学生 × 考核项（名称）。grade 永远存「当前有效等级」；override=true 表示手调，自动值不再覆盖。
+export async function upsertCell(row) {
+  const i = store.exams.findIndex(x => x.student_id === row.student_id && x.term === row.term && x.name === row.name);
+  const full = { id: i >= 0 ? store.exams[i].id : crypto.randomUUID(), score: null, raw: null, override: false, ...row, updated_at: new Date().toISOString() };
+  if (i >= 0) store.exams[i] = full; else store.exams.push(full);
+  await run(db => db.from('cls_exams').upsert(full, { onConflict: 'student_id,term,name' }));
+}
+export async function deleteCell(student_id, term, name) {
+  store.exams = store.exams.filter(x => !(x.student_id === student_id && x.term === term && x.name === name));
+  await run(db => db.from('cls_exams').delete().eq('student_id', student_id).eq('term', term).eq('name', name));
+}
+export async function bulkUpsertCells(rows) {
+  rows.forEach(row => {
+    const i = store.exams.findIndex(x => x.student_id === row.student_id && x.term === row.term && x.name === row.name);
+    const full = { id: i >= 0 ? store.exams[i].id : crypto.randomUUID(), score: null, raw: null, override: false, ...row, updated_at: new Date().toISOString() };
+    if (i >= 0) store.exams[i] = full; else store.exams.push(full);
+  });
+  if (DEV) { devSave(); return; }
+  const db = await sb();
+  for (let i = 0; i < rows.length; i += 400) {
+    const r = await db.from('cls_exams').upsert(rows.slice(i, i + 400).map(x => store.exams.find(e => e.student_id === x.student_id && e.term === x.term && e.name === x.name)), { onConflict: 'student_id,term,name' });
+    if (r.error) { window.dispatchEvent(new CustomEvent('cls-save-error', { detail: r.error })); throw r.error; }
+  }
+}
+export async function renameItemCells(term, classStudentIds, from, to) {
+  store.exams.forEach(x => { if (x.term === term && x.name === from && classStudentIds.includes(x.student_id)) x.name = to; });
+  if (DEV) { devSave(); return; }
+  await run(db => db.from('cls_exams').update({ name: to }).eq('term', term).eq('name', from).in('student_id', classStudentIds));
+}
+export async function deleteItemCells(term, classStudentIds, name) {
+  store.exams = store.exams.filter(x => !(x.term === term && x.name === name && classStudentIds.includes(x.student_id)));
+  if (DEV) { devSave(); return; }
+  await run(db => db.from('cls_exams').delete().eq('term', term).eq('name', name).in('student_id', classStudentIds));
+}
+export async function addMark(m) {
+  if (!store.gbReady) { window.dispatchEvent(new CustomEvent('cls-save-error', { detail: 'gradebook.sql 还没跑' })); throw new Error('gb not ready'); }
+  const row = { id: crypto.randomUUID(), created_at: new Date().toISOString(), val: null, reason: null, on_date: null, ...m };
+  store.marks.push(row);
+  await run(db => db.from('cls_marks').insert(row));
+  return row;
+}
+export async function deleteMark(id) {
+  store.marks = store.marks.filter(m => m.id !== id);
+  await run(db => db.from('cls_marks').delete().eq('id', id));
+}
+export async function upsertReport(student_id, term, patch) {
+  if (!store.gbReady) { window.dispatchEvent(new CustomEvent('cls-save-error', { detail: 'gradebook.sql 还没跑' })); throw new Error('gb not ready'); }
+  const i = store.reports.findIndex(r => r.student_id === student_id && r.term === term);
+  const row = { student_id, term, conduct: null, effort: null, ptc: null, note: null, overrides: {}, ...(i >= 0 ? store.reports[i] : {}), ...patch, updated_at: new Date().toISOString() };
+  if (i >= 0) store.reports[i] = row; else store.reports.push(row);
+  await run(db => db.from('cls_term_report').upsert(row, { onConflict: 'student_id,term' }));
+}
+export async function setPins(map) { // { studentId: '1234' }
+  Object.entries(map).forEach(([id, pin]) => { const s = store.students.find(x => x.id === id); if (s) s.pin = pin; });
+  if (DEV) { devSave(); return; }
+  const db = await sb();
+  for (const [id, pin] of Object.entries(map)) { const r = await db.from('cls_students').update({ pin }).eq('id', id); if (r.error) { window.dispatchEvent(new CustomEvent('cls-save-error', { detail: r.error })); throw r.error; } }
 }
