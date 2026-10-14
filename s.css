@@ -18,3 +18,4 @@ button { font: inherit; border: none; border-radius: 12px; padding: 13px; backgr
 .it { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: #55524c; padding: 2px 0; } .it span:last-child { display: flex; gap: 10px; align-items: center; } .it em { font-style: normal; color: var(--mute); font-size: 12px; }
 .note { font-size: 12px; color: var(--mute); line-height: 1.6; }
 .back { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+[hidden] { display: none !important; }   /* .card 的 display:flex 会盖过浏览器对 hidden 的默认处理 */
