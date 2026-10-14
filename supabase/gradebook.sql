@@ -54,7 +54,7 @@ begin
 end $$;
 
 -- 6. 学生自查：班级 + 学号 + 中文名 + 个人码 → 只返回这一个学生的成绩和课堂分。
---    只给学生看当前学季、老师开放的考试项成绩 + 课堂分。连续输错 5 次锁 15 分钟（按 班级+学号 计）；错误提示一律「信息不对」，不透露是哪一项错。
+--    只给学生看当前学季、老师开放的考试项「等级」+ 课堂分（不含分数）。连续输错 5 次锁 15 分钟（按 班级+学号 计）；错误提示一律「信息不对」，不透露是哪一项错。
 create or replace function public.cls_student_view(p_class text, p_num int, p_name text, p_pin text)
 returns jsonb
 language plpgsql security definer set search_path = public as $$
@@ -82,8 +82,9 @@ begin
   base := coalesce((st->'base_score'->>v_term)::int, case when v_term = 'Q1' then 100 else 60 end);
   select base + coalesce(sum(delta), 0) into sc from cls_events where student_id = s.id and term = v_term and kind = 'score';
   cfg := st->'gb_config'->(p_class || '|' || v_term);
-  -- 只返回「当前学季」里老师已开放（show=true）的考试项；不返回综评、总等级、Conduct/Effort/PTC/Green Slip、手调综评
-  vis := coalesce((select jsonb_agg(jsonb_build_object('name', i->>'name', 'mode', i->>'mode', 'max', i->'max'))
+  -- 只返回「当前学季」里老师已开放（show=true）的考试项，而且只给等级不给分数（Lynn 2026-10-14）；
+  -- 不返回原始分/满分、综评、总等级、Conduct/Effort/PTC/Green Slip、手调综评
+  vis := coalesce((select jsonb_agg(jsonb_build_object('name', i->>'name'))
                    from jsonb_array_elements(coalesce(cfg->'items', '[]'::jsonb)) i
                    where coalesce((i->>'show')::boolean, false)), '[]'::jsonb);
   return jsonb_build_object(
@@ -92,8 +93,7 @@ begin
     'term', v_term,
     'points', sc,
     'items', vis,
-    'gb_points', st->'gb_points',
-    'cells', coalesce((select jsonb_agg(jsonb_build_object('name', e.name, 'raw', e.raw, 'score', e.score, 'grade', e.grade, 'override', e.override))
+    'cells', coalesce((select jsonb_agg(jsonb_build_object('name', e.name, 'grade', e.grade))
                        from cls_exams e
                        where e.student_id = s.id and e.term = v_term
                          and e.name in (select v->>'name' from jsonb_array_elements(vis) v)), '[]'::jsonb)
