@@ -23,12 +23,15 @@ function show(d) {
   const order = (d.items || []).map(i => i.name);
   const rows = (d.cells || []).filter(c => order.includes(c.name))
     .sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
+  const t = new Date();
+  const when = `${t.getMonth() + 1}月${t.getDate()}日 ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
   const out = $('#out');
   out.innerHTML = `<div class="card"><div class="who"><b>${h(d.student.name)}</b><span>${h(d.class_name || '')} · #${h(d.student.num)}</span></div>
     <div class="pts"><b>${h(d.points)}</b><span>课堂分 Class points (${h(d.term)})</span></div></div>
     <div class="card"><div class="who"><b>考试成绩 Test results</b></div>
       ${rows.length ? rows.map(r => `<div class="it"><span>${h(r.name)}</span><span>${chip(r.grade)}</span></div>`).join('') : '<div class="note">目前还没有公布的成绩。 No results released yet.</div>'}
       <div class="note">这里只显示老师已公布的单项成绩。总评 Final grade 由学校成绩系统统一公布。 Only released test results are shown here. Final grades are published by the school system.</div></div>
+    <div class="stamp">查询时间 Checked: ${h(when)} · 想看最新的，请关掉页面重新打开。 Close and reopen this page to refresh.</div>
     <button class="back" id="back">返回 Back</button>`;
   out.hidden = false; $('#f').hidden = true;
   $('#back').onclick = () => { out.hidden = true; $('#f').hidden = false; $('#pin').value = ''; };
