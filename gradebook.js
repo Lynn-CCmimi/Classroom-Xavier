@@ -225,12 +225,32 @@ function distTab(body, cfg) {
   body.innerHTML = `<div class="gb-cards">${cards.map(c => {
     const n = C.LETTERS.reduce((a, l) => a + c.by[l].length, 0);
     const open = gb.open && gb.open.startsWith(c.id + ':') ? gb.open.split(':')[1] : null;
-    return `<div class="dcard"><div class="dhd"><b>${X.h(c.title)}</b><span>${X.h(c.sub)}</span><div class="grow"></div><span>${n} 人已录${c.none.length ? ` · 未录 ${c.none.length}` : ''}</span></div>
+    return `<div class="dcard"><div class="dhd"><b>${X.h(c.title)}</b><span>${X.h(c.sub)}</span><div class="grow"></div><span>${n} 人已录${c.none.length ? ` · 未录 ${c.none.length}` : ''}</span>${c.id !== '__final' && c.by['F'].length ? `<button class="copyf" data-copyf="${c.id}">复制 F 名单 · ${c.by['F'].length}</button>` : ''}</div>
       <div class="dbar">${n ? C.LETTERS.filter(l => c.by[l].length).map(l => `<button class="seg-${l.replace('+', 'p')}" style="flex:${c.by[l].length}" data-dl="${c.id}:${l}">${l}<b>${c.by[l].length}</b></button>`).join('') : '<span class="mute">还没有分数</span>'}</div>
       <div class="dchips">${C.LETTERS.map(l => `<button class="dchip ${open === l ? 'on' : ''} ${l === 'F' && c.by[l].length ? 'f' : ''}" data-dl="${c.id}:${l}">${l} <b>${c.by[l].length}</b></button>`).join('')}${c.none.length ? `<button class="dchip ${open === 'none' ? 'on' : ''}" data-dl="${c.id}:none">未录 <b>${c.none.length}</b></button>` : ''}</div>
       ${open ? `<div class="dnames ${open === 'F' ? 'f' : ''}">${(open === 'none' ? c.none : c.by[open]).map(s => `<span>${s.num ?? ''} ${X.h(s.name)}</span>`).join('') || '<span class="mute">没有人</span>'}</div>` : ''}</div>`;
   }).join('')}</div>`;
   body.querySelectorAll('[data-dl]').forEach(b => b.onclick = () => { gb.open = gb.open === b.dataset.dl ? null : b.dataset.dl; X.rerender(); });
+  body.querySelectorAll('[data-copyf]').forEach(b => b.onclick = () => copyFailList(cfg, b.dataset.copyf));
+}
+
+// 复制这次考试里 F 的学生，贴到群发表格的「不及格通知」里用
+// 列：班级 / 学号 / 姓名 / 分数 / 满分
+function copyFailList(cfg, itemId) {
+  const it = cfg.items.find(i => i.id === itemId);
+  const max = it.mode === 'oral' ? 35 : it.mode === 'pct' ? 100 : it.max;
+  const rows = [];
+  X.students().forEach(s => {
+    const cell = cellsOf(s.id, cfg)[it.id];
+    if (C.effLetter(it, cell) !== 'F') return;
+    const e = C.parseEntry(cell && (cell.raw ?? (cell.score != null ? String(cell.score) : '')));
+    rows.push([X.className, s.num ?? '', s.name, (e && e.num != null) ? e.num : '', max ?? ''].join('\t'));
+  });
+  if (!rows.length) return X.toast('这一项没有 F');
+  const noScore = rows.filter(r => r.split('\t')[3] === '').length;
+  navigator.clipboard.writeText(rows.join('\n')).then(
+    () => X.toast(`已复制 ${rows.length} 人${noScore ? `（其中 ${noScore} 人只有等级没有分数）` : ''}`),
+    () => X.toast('复制失败'));
 }
 
 // ---------- 表现 ----------
