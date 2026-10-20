@@ -64,6 +64,10 @@ const attOf = (sid, date) => store.attendance.find(a => a.student_id === sid && 
 const isLeader = sid => { const st = stuById(sid); return !!st && ((S().leaders || {})[st.class_id] || []).includes(sid); };
 const groupOf = sid => { const c = cls(); return c ? c.groups.findIndex(g => g.student_ids.includes(sid)) : -1; };
 const isMonitor = sid => ((S().monitors || {})[stuById(sid)?.class_id]) === sid;
+// 职务：班长 / 副班长 / 秘书，每班各一人，一人只能占一个（设新的会自动清掉旧的）。组长另算，互不影响。
+const ROLES = [['monitors', '班长', ''], ['vice', '副班长', 'v'], ['secretary', '秘书', 'sec']];
+const hasRole = (sid, key) => ((S()[key] || {})[stuById(sid)?.class_id]) === sid;
+const roleOf = sid => ROLES.find(([k]) => hasRole(sid, k)) || null;
 // 分数颜色：只给两端上色——A/A+ 绿、F 红，中间黑
 const gradeCls = sc => { const g = gradeOf(sc); return g === 'A+' || g === 'A' ? 'g-hi' : g === 'F' ? 'g-lo' : ''; };
 const gradeOf = sc => { const th = S().grade_thresholds || []; return (th.find(t => sc >= t.min) || th[th.length - 1] || { label: '' }).label; };
@@ -111,8 +115,8 @@ function card(sid) {
   const s = stuById(sid); if (!s) return '<div class="card"></div>';
   const c = cls(); const a = attOf(sid, classDate(c)); const r = risk(sid);
   const abs = a && a.flags.includes('absent');
-  return `<div class="card ${abs ? 'absent' : ''} ${visible(sid) ? '' : 'dim'} ${ui.swapFirst === sid ? 'sel' : ''} ${isMonitor(sid) ? 'monitor' : ''} ${isLeader(sid) ? 'leader' : ''}" data-id="${sid}">
-    ${isMonitor(sid) ? '<span class="mon">班长</span>' : isLeader(sid) ? '<span class="mon ld">组长</span>' : ''}${r ? `<span class="dot ${r === 'F' ? 'bad' : 'warn'}"></span>` : ''}
+  return `<div class="card ${abs ? 'absent' : ''} ${visible(sid) ? '' : 'dim'} ${ui.swapFirst === sid ? 'sel' : ''} ${isMonitor(sid) ? 'monitor' : ''} ${isLeader(sid) ? 'leader' : ''} ${roleOf(sid) || isLeader(sid) ? 'tagged' : ''}" data-id="${sid}">
+    ${(r2 => r2 ? `<span class="mon ${r2[2]}">${r2[1]}</span>` : isLeader(sid) ? '<span class="mon ld">组长</span>' : '')(roleOf(sid))}${r ? `<span class="dot ${r === 'F' ? 'bad' : 'warn'}"></span>` : ''}
     <div class="nm">${h(s.name)}</div><div class="sc ${gradeCls(score(sid))}">${score(sid)}</div>
     ${attChip(a) || `<span class="sub">${pad(s.num ?? '')}</span>`}
     ${called(sid) === 0 ? '<span class="bar"></span>' : ''}</div>`;
@@ -158,7 +162,7 @@ function rowHtml(s, date, online) {
         <button class="ab ${flags.includes('camera_off') ? 'on purple' : ''}" data-att="camera_off">摄像头</button>
         <button class="ab ${flags.includes('no_response') ? 'on purple' : ''}" data-att="no_response">无回应${flags.includes('no_response') && a.noresp_time ? '<small>' + a.noresp_time + '</small>' : ''}</button></span>`
     : `<span class="c-att" style="font-size:12px;color:${flags.length ? 'var(--warn)' : 'var(--mute)'}">${[...attText(a, 'att'), ...attText(a, 'cam')].join(', ') || '出勤'}</span>`;
-  return `<div class="row ${visible(s.id) ? '' : 'dim'} ${flags.includes('absent') ? 'absent' : ''}" data-id="${s.id}"><span class="num">${pad(s.num ?? '')}</span><span class="nm">${h(s.name)}${isMonitor(s.id) ? '<span class="mon">班长</span>' : ''}${isLeader(s.id) ? '<span class="mon ld">组长</span>' : ''}${r ? ` <span class="dot ${r === 'F' ? 'bad' : 'warn'}" style="position:static;display:inline-block;margin-left:4px"></span>` : ''}</span><span class="eng">${h(s.eng_name || '')}</span><span class="sc ${gradeCls(score(s.id))}">${score(s.id)}</span><span>${r ? `<span class="tag ${r === 'F' ? 'bad' : 'warn'}">${r}</span>` : '<span class="tag mute">—</span>'}</span><span class="c-call">${n === 0 ? '<span class="tag blue">0</span>' : `<b>${n}</b>`}</span>${attCell}</div>`;
+  return `<div class="row ${visible(s.id) ? '' : 'dim'} ${flags.includes('absent') ? 'absent' : ''}" data-id="${s.id}"><span class="num">${pad(s.num ?? '')}</span><span class="nm">${h(s.name)}${(r2 => r2 ? `<span class="mon ${r2[2]}">${r2[1]}</span>` : '')(roleOf(s.id))}${isLeader(s.id) ? '<span class="mon ld">组长</span>' : ''}${r ? ` <span class="dot ${r === 'F' ? 'bad' : 'warn'}" style="position:static;display:inline-block;margin-left:4px"></span>` : ''}</span><span class="eng">${h(s.eng_name || '')}</span><span class="sc ${gradeCls(score(s.id))}">${score(s.id)}</span><span>${r ? `<span class="tag ${r === 'F' ? 'bad' : 'warn'}">${r}</span>` : '<span class="tag mute">—</span>'}</span><span class="c-call">${n === 0 ? '<span class="tag blue">0</span>' : `<b>${n}</b>`}</span>${attCell}</div>`;
 }
 function attStats(cid, date) {
   const cnt = { absent: 0, late: 0, camera_off: 0, no_response: 0 };
@@ -222,13 +226,12 @@ function openPanel(sid) {
   $('#overlay').innerHTML = `<div class="dim-bg" id="panelBg"></div><div class="sheet">
     <div class="sheet-hd">
       <div><div class="name">${h(s.name)} <span class="meta">${pad(s.num ?? '')} · ${h(s.eng_name || '')}</span></div>
-        <div class="meta">${isMonitor(sid) ? '<span class="mon">班长</span> · ' : ''}${isLeader(sid) ? '<span class="mon ld">组长</span> · ' : ''}${term()} 点名 <b style="color:var(--ink)">${called(sid)}</b> 次${pt ? ` · ${pt} 总分 ${baseScore(pt) + store.events.filter(e => e.student_id === sid && e.term === pt && e.kind === 'score').reduce((x, e) => x + e.delta, 0)}` : ''}</div></div>
+        <div class="meta">${(r2 => r2 ? `<span class="mon ${r2[2]}">${r2[1]}</span> · ` : '')(roleOf(sid))}${isLeader(sid) ? '<span class="mon ld">组长</span> · ' : ''}${term()} 点名 <b style="color:var(--ink)">${called(sid)}</b> 次${pt ? ` · ${pt} 总分 ${baseScore(pt) + store.events.filter(e => e.student_id === sid && e.term === pt && e.kind === 'score').reduce((x, e) => x + e.delta, 0)}` : ''}</div></div>
       <div class="grow"></div>
       <div style="display:flex;align-items:baseline;gap:8px"><span class="score">${sc}</span><span class="tag ${sc < 74 ? 'warn' : ''}" style="background:var(--green-soft);color:var(--green)">${h(gradeOf(sc))}</span></div>
-      <button class="icon-btn" id="panelLd" title="组长" style="font-size:11px;font-weight:800;color:${isLeader(sid) ? 'var(--acc)' : 'var(--mute)'};background:${isLeader(sid) ? 'var(--acc-soft)' : '#fff'}">组长</button>
-      <button class="icon-btn" id="panelMon" title="班长" style="font-size:11px;font-weight:800;color:${isMonitor(sid) ? '#8a6b12' : 'var(--mute)'};background:${isMonitor(sid) ? '#fbecc0' : '#fff'}">班长</button>
       <button class="icon-btn" id="panelClose">${ICON.x}</button>
     </div>
+    <div class="roles">${ROLES.map(([k, n, c]) => `<button class="role ${c} ${hasRole(sid, k) ? 'on' : ''}" data-role="${k}">${n}</button>`).join('')}<button class="role ld ${isLeader(sid) ? 'on' : ''}" data-ld="1">组长</button></div>
     <div class="big-row"><button class="btn big blue" data-act="called">${ICON.tick}点过了</button><button class="btn big green" data-delta="1" data-reason="回答正确">+1 回答正确</button></div>
     <div class="two"><div class="col">
       <div class="sec">加分</div><div class="wrap">${lib.plus.map(([r, d]) => `<button class="btn green" data-delta="${d}" data-reason="${h(r)}">+${d} ${h(r)}</button>`).join('')}</div>
@@ -250,14 +253,25 @@ function openPanel(sid) {
       <div>${recs.length ? recs.map(e => `<div class="rec"><span class="d">${e.on_date ? e.on_date.slice(5).replace('-', '/') : 'D' + (e.day || '?')}</span><span class="v ${e.kind === 'called' ? 'call' : e.delta > 0 ? 'pos' : 'neg'}">${e.kind === 'called' ? '点名' : (e.delta > 0 ? '+' : '') + e.delta}</span><span class="r">${h(e.reason || '')}</span><button class="x" data-del="${e.id}">删</button></div>`).join('') : '<div style="font-size:12px;color:var(--mute);padding:6px 0">还没有记录</div>'}</div>
     </div></div></div>`;
   $('#panelBg').onclick = closePanel; $('#panelClose').onclick = closePanel;
-  $('#panelLd').onclick = async () => {
+  const sheet = $('#overlay .sheet');
+  sheet.querySelectorAll('[data-role]').forEach(b => b.onclick = async () => {
+    const key = b.dataset.role, label = (ROLES.find(r => r[0] === key) || [])[1];
+    const on = hasRole(sid, key);
+    for (const [k] of ROLES) {                      // 一人只占一个职务
+      const m = { ...(S()[k] || {}) };
+      if (m[s.class_id] === sid) { delete m[s.class_id]; await db.setSetting(k, m); }
+    }
+    if (!on) { const m = { ...(S()[key] || {}) }; m[s.class_id] = sid; await db.setSetting(key, m); }
+    toast(on ? `已取消${label}` : `${s.name} 设为${label}`);
+    render(); openPanel(sid);
+  });
+  const _ld = async () => {
     const all = { ...(S().leaders || {}) }; let arr = [...(all[s.class_id] || [])];
     if (arr.includes(sid)) { arr = arr.filter(x => x !== sid); toast('已取消组长'); }
     else { const gi = groupOf(sid); const c = cls(); const mates = gi >= 0 ? c.groups[gi].student_ids : []; arr = arr.filter(x => !mates.includes(x)); arr.push(sid); toast(`${s.name} 设为${gi >= 0 ? c.groups[gi].name : ''}组长`); }
     all[s.class_id] = arr; await db.setSetting('leaders', all); render(); openPanel(sid);
   };
-  $('#panelMon').onclick = async () => { const m = { ...(S().monitors || {}) }; if (m[s.class_id] === sid) delete m[s.class_id]; else m[s.class_id] = sid; await db.setSetting('monitors', m); toast(m[s.class_id] === sid ? `${s.name} 设为班长` : '已取消班长'); render(); openPanel(sid); };
-  const sheet = $('#overlay .sheet');
+  const ldBtn = sheet.querySelector('[data-ld]'); if (ldBtn) ldBtn.onclick = _ld;
   sheet.querySelectorAll('[data-delta]').forEach(b => b.onclick = () => addScore(sid, parseInt(b.dataset.delta), b.dataset.reason, true));
   sheet.querySelector('[data-act=called]').onclick = async () => { await markCalled(sid); closePanel(); };
   $('#cusOk').onclick = () => { const d = parseInt($('#cusDelta').value), r = $('#cusReason').value.trim(); if (!d) return; addScore(sid, d, r || (d > 0 ? '加分' : '扣分'), true); };
