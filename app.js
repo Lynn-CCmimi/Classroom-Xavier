@@ -155,14 +155,16 @@ function renderMain() {
 function rowHtml(s, date, online) {
   const r = risk(s.id), n = called(s.id), a = attOf(s.id, date);
   const flags = a ? a.flags : [];
+  const absBtn = `<button class="ab ${flags.includes('absent') ? 'on bad' : ''}" data-att="absent">缺席</button>`;
+  const otherTxt = flags.filter(f => f !== 'absent').map(f => ATT_CN[f] + (f === 'late' && a.late_time ? ' ' + a.late_time : f === 'no_response' && a.noresp_time ? ' ' + a.noresp_time : '')).join('、');
   const attCell = online
     ? `<span class="c-att arow">
-        <button class="ab ${flags.includes('absent') ? 'on bad' : ''}" data-att="absent">缺席</button>
+        ${absBtn}
         <button class="ab ${flags.includes('late') ? 'on warn' : ''}" data-att="late">迟到${flags.includes('late') && a.late_time ? '<small>' + a.late_time + '</small>' : ''}</button>
         <button class="ab ${flags.includes('camera_off') ? 'on purple' : ''}" data-att="camera_off">摄像头</button>
         <button class="ab ${flags.includes('no_response') ? 'on purple' : ''}" data-att="no_response">无回应${flags.includes('no_response') && a.noresp_time ? '<small>' + a.noresp_time + '</small>' : ''}</button></span>`
-    : `<span class="c-att" style="font-size:12px;color:${flags.length ? 'var(--warn)' : 'var(--mute)'}">${[...attText(a, 'att'), ...attText(a, 'cam')].join(', ') || '出勤'}</span>`;
-  return `<div class="row ${visible(s.id) ? '' : 'dim'} ${flags.includes('absent') ? 'absent' : ''}" data-id="${s.id}"><span class="num">${pad(s.num ?? '')}</span><span class="nm">${h(s.name)}${(r2 => r2 ? `<span class="mon ${r2[2]}">${r2[1]}</span>` : '')(roleOf(s.id))}${isLeader(s.id) ? '<span class="mon ld">组长</span>' : ''}${r ? ` <span class="dot ${r === 'F' ? 'bad' : 'warn'}" style="position:static;display:inline-block;margin-left:4px"></span>` : ''}</span><span class="eng">${h(s.eng_name || '')}</span><span class="sc ${gradeCls(score(s.id))}">${score(s.id)}</span><span>${r ? `<span class="tag ${r === 'F' ? 'bad' : 'warn'}">${r}</span>` : '<span class="tag mute">—</span>'}</span><span class="c-call">${n === 0 ? '<span class="tag blue">0</span>' : `<b>${n}</b>`}</span>${attCell}</div>`;
+    : `<span class="c-att arow">${absBtn}${otherTxt ? `<span class="att-txt">${otherTxt}</span>` : ''}</span>`;
+  return `<div class="row hasatt ${online ? 'multiatt' : ''} ${visible(s.id) ? '' : 'dim'} ${flags.includes('absent') ? 'absent' : ''}" data-id="${s.id}"><span class="num">${pad(s.num ?? '')}</span><span class="nm">${h(s.name)}${(r2 => r2 ? `<span class="mon ${r2[2]}">${r2[1]}</span>` : '')(roleOf(s.id))}${isLeader(s.id) ? '<span class="mon ld">组长</span>' : ''}${r ? ` <span class="dot ${r === 'F' ? 'bad' : 'warn'}" style="position:static;display:inline-block;margin-left:4px"></span>` : ''}</span><span class="eng">${h(s.eng_name || '')}</span><span class="sc ${gradeCls(score(s.id))}">${score(s.id)}</span><span>${r ? `<span class="tag ${r === 'F' ? 'bad' : 'warn'}">${r}</span>` : '<span class="tag mute">—</span>'}</span><span class="c-call">${n === 0 ? '<span class="tag blue">0</span>' : `<b>${n}</b>`}</span>${attCell}</div>`;
 }
 function attStats(cid, date) {
   const cnt = { absent: 0, late: 0, camera_off: 0, no_response: 0 };
@@ -195,7 +197,7 @@ function bindRow(el) {
   el.onpointerup = cancel; el.onpointercancel = cancel; el.onpointerleave = cancel;
   el.onclick = e => { if (e.target.closest('[data-att]')) return; if (fired) { fired = false; return; } ui.swap ? swapTap(id) : openPanel(id); };
   el.oncontextmenu = e => e.preventDefault();
-  el.querySelectorAll('[data-att]').forEach(b => b.onclick = async e => { e.stopPropagation(); await setAttFlag(id, b.dataset.att); refreshRow(id); });
+  el.querySelectorAll('[data-att]').forEach(b => b.onclick = async e => { e.stopPropagation(); await markAtt(id, b.dataset.att); refreshRow(id); });
 }
 function bindCards() {
   document.querySelectorAll('[data-id]').forEach(bindRow);
@@ -301,7 +303,21 @@ async function setAttFlag(sid, flag) {
   if (!flags.length) await db.deleteAttendance(sid, date);
   else await db.upsertAttendance({ student_id: sid, class_id: c.id, on_date: date, flags, late_time, noresp_time });
 }
-async function toggleAtt(sid, flag) { await setAttFlag(sid, flag); render(); openPanel(sid); }
+// 标考勤统一走这里：写完弹一条写明「班级 · 学号 姓名」的提示，并提供撤销。
+// 不写明是哪个班的哪个人，就会出现 2026-10-22 那次「停在 9E 按班号点，七个人全标错」的事。
+async function markAtt(sid, flag) {
+  const c = cls(), date = classDate(c), s = stuById(sid);
+  const b = attOf(sid, date);
+  const prev = b ? { student_id: b.student_id, class_id: b.class_id, on_date: b.on_date, flags: [...b.flags], late_time: b.late_time, noresp_time: b.noresp_time } : null;
+  await setAttFlag(sid, flag);
+  const now = attOf(sid, date);
+  const who = `${c.name} · ${pad(s.num ?? '')} ${s.name}`;
+  toast(now && now.flags.length ? `${who} ${ATT_CN[now.flags[0]] || '已记录'}` : `${who} 考勤已清除`, async () => {
+    if (prev) await db.upsertAttendance(prev); else await db.deleteAttendance(sid, date);
+    render(); if (panelSid === sid) openPanel(sid);
+  });
+}
+async function toggleAtt(sid, flag) { await markAtt(sid, flag); render(); openPanel(sid); }
 async function saveTimes(sid) {
   const c = cls(), date = classDate(c), a = attOf(sid, date); if (!a) return;
   const lt = $('#lateT'), nt = $('#norT');
