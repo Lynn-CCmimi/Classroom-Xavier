@@ -337,3 +337,15 @@ svg { display: block; }
 .roles .role.ld.on  { background: var(--acc-soft); color: var(--acc); }
 /* 带职务标签的卡片：名字整体下移，避免「副班长」这类三字标签压住名字 */
 .card.tagged { padding-top: 20px; }
+
+/* 名单：到校日也给一个「缺席」按钮，不用再点开面板（2026-10-22） */
+.att-txt { font-size: 12px; color: var(--warn); align-self: center; }
+@media (max-width: 760px) {
+  /* 到校日只有一个「缺席」按钮 —— 放在同一行，别把列表撑成两倍高 */
+  .row.hasatt { grid-template-columns: 28px 1fr 44px auto; grid-template-areas: "n nm sc a"; }
+  .row.hasatt .num { grid-area: n; } .row.hasatt .nm { grid-area: nm; } .row.hasatt .sc { grid-area: sc; }
+  .row.hasatt > span:nth-child(5) { display: none; }
+  .row.hasatt .c-att.arow { display: flex; grid-area: a; }
+  /* 线上课有四个按钮，才换到第二行 */
+  .row.multiatt { grid-template-columns: 28px 1fr 44px; grid-template-areas: "n nm sc" "a a a"; row-gap: 8px; }
+}
