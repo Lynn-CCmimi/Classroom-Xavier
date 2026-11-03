@@ -32,6 +32,10 @@ const S = () => store.settings;
 const term = () => S().current_term || 'Q1';
 const prevTerm = () => { const n = parseInt(term().slice(1)); return n > 1 ? 'Q' + (n - 1) : null; };
 const cls = () => store.classes.find(c => c.id === ui.cls);
+// 「收起」的班级（例如 XCE 期间的原班）：标签栏里不列出，改从菜单进入。
+// 正停在它上面时照常显示，否则会不知道自己在哪个班——这正是 10/22 标错考勤的根源。
+const tucked = () => S().tucked_classes || [];
+const tabClasses = () => store.classes.filter(c => !tucked().includes(c.id) || c.id === ui.cls);
 const stuById = id => store.students.find(s => s.id === id);
 const classStudents = cid => store.students.filter(s => s.class_id === cid && s.active !== false).sort((a, b) => (a.num ?? 999) - (b.num ?? 999));
 let CAL = { days: {} };
@@ -97,7 +101,7 @@ function renderHeader() {
   const stus = classStudents(c.id);
   const nF = stus.filter(s => risk(s.id) === 'F').length, nZero = stus.filter(s => called(s.id) === 0).length;
   $('#hdr').innerHTML = `
-    <div class="seg class-seg">${store.classes.map(x => `<button data-cls="${x.id}" class="${x.id === ui.cls ? 'on' : ''}">${h(x.name)}</button>`).join('')}</div>
+    <div class="seg class-seg">${tabClasses().map(x => `<button data-cls="${x.id}" class="${x.id === ui.cls ? 'on' : ''} ${tucked().includes(x.id) ? 'tuck' : ''}">${h(x.name)}</button>`).join('')}</div>
     <button class="hbtn ${info.day === 0 || info.day === null ? 'warn' : ''}" id="dayBtn">${ICON.cal}<b>${dayLabel(info)}</b><span class="date-txt" style="color:var(--mute)">· ${fmtDate(date)}${date !== todayStr() ? ' · 非今天' : ''}</span></button>
     <button class="hbtn ${info.mode === 'chips' ? 'on' : ''}" id="onlineBtn">${ICON.wifi}${modeLabel(info.mode) || '到校'}</button>
     ${c.id === 'G9E' ? `<button class="hbtn" id="rotBtn">${ICON.rot}轮转</button>` : ''}
@@ -179,7 +183,7 @@ function refreshRow(sid) {
   renderHeader();
 }
 function renderTabbar() {
-  $('#tabbar').innerHTML = store.classes.map(x => `<button data-cls="${x.id}" class="${x.id === ui.cls ? 'on' : ''}">${h(x.name)}</button>`).join('');
+  $('#tabbar').innerHTML = tabClasses().map(x => `<button data-cls="${x.id}" class="${x.id === ui.cls ? 'on' : ''} ${tucked().includes(x.id) ? 'tuck' : ''}">${h(x.name)}</button>`).join('');
 }
 
 // ---------- 卡片交互：单击 / 长按 ----------
@@ -461,6 +465,7 @@ async function copyText(t) { try { await navigator.clipboard.writeText(t); toast
 // ---------- 菜单 / 设置 ----------
 function openMenu() {
   const items = [
+    ...(tucked().length ? [['🗂', '其他班级（' + tucked().map(id => (store.classes.find(c => c.id === id) || {}).name).filter(Boolean).join('、') + '）', openOtherClasses]] : []),
     ['📅', '设置今天 D 几 / 日期', openDayModal],
     ['📆', '回看日历（以前某一天）', () => openCalendar()],
     ['📹', '线上考勤报告', () => openReport()],
@@ -571,6 +576,18 @@ function openLibEditor() {
   };
   draw();
 }
+// 收起的班级从这里进；进去之后它会出现在标签栏里，方便切回来
+function openOtherClasses() {
+  const list = store.classes.filter(c => tucked().includes(c.id));
+  modal(`<h3>其他班级</h3><div class="hint">这些班这段时间不在标签栏里，但数据都在——补考成绩、以前的记录照常可以录。点进去之后它会临时出现在标签栏上。</div>
+    ${list.map(c => `<button class="mbtn" data-oc="${c.id}">${h(c.name)} · ${classStudents(c.id).length} 人</button>`).join('')}
+    <button class="mbtn" id="mClose">关闭</button>`);
+  document.querySelectorAll('[data-oc]').forEach(b => b.onclick = () => {
+    ui.cls = b.dataset.oc; localStorage.setItem('cls_cur', ui.cls); ui.swapFirst = null;
+    closeModal(); render(); toast(`已切到 ${(store.classes.find(c => c.id === ui.cls) || {}).name}`);
+  });
+}
+
 function openGradeEditor() {
   const th = JSON.parse(JSON.stringify(S().grade_thresholds || []));
   modal(`<h3>等级线</h3>${th.map((t, i) => `<div class="inline"><b style="width:36px">${h(t.label)}</b><input type="number" data-g="${i}" value="${t.min}"><span class="hint">分以上</span></div>`).join('')}<button class="mbtn primary" id="gOk">保存</button><button class="mbtn" id="mClose">取消</button>`);
