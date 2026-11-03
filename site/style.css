@@ -352,3 +352,10 @@ svg { display: block; }
 /* 收起的班级（XCE 期间的原班）：标签上加一点区分，提醒不是当前主用的班 */
 .seg button.tuck, .tabbar button.tuck { font-style: italic; }
 .seg button.tuck.on, .tabbar button.tuck.on { box-shadow: inset 0 0 0 1.5px var(--warn); }
+
+/* 换座模式：拖动卡片 */
+.room.swapping .card { touch-action: none; cursor: grab; }
+.room.swapping .card:active { cursor: grabbing; }
+.card.dragging { opacity: .25; }
+.card.drop { outline: 2.5px dashed var(--acc); outline-offset: -2px; background: var(--acc-soft); }
+.card.drag-ghost { box-shadow: 0 10px 28px -8px rgba(28,27,25,.45); opacity: .95; transition: none; }
