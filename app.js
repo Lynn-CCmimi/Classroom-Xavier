@@ -145,8 +145,8 @@ function renderMain() {
     if (c.id === 'G9E' && c.position_to_group) order = c.position_to_group;
     const layout = c.id === '10A' ? 'grid' : 'convex';
     const html = order.map(gi => groupBlock(c.groups[gi], gi, layout)).join('');
-    m.innerHTML = `${ui.swap ? '<div class="swap-hint">换座模式：点第一个学生，再点第二个，完成互换</div>' : ''}
-      <div class="room">${html}<div class="wb">WHITEBOARD · 黑板${c.id === 'G9E' ? ` · 已轮转 ${c.rotation_step || 0} 次` : ''}</div></div>
+    m.innerHTML = `${ui.swap ? '<div class="swap-hint">换座模式：直接拖动卡片到另一个座位，或者点一个再点另一个 — 两人互换</div>' : ''}
+      <div class="room${ui.swap ? ' swapping' : ''}">${html}<div class="wb">WHITEBOARD · 黑板${c.id === 'G9E' ? ` · 已轮转 ${c.rotation_step || 0} 次` : ''}</div></div>
       <div class="legend"><span><i style="background:var(--bad)"></i>上季度有 F</span><span><i style="background:var(--warn)"></i>上季度有 D</span><span><i class="bar"></i>本季度还没被点过</span><span>单击 → 面板 · 长按 → 点过了</span></div>`;
   } else {
     const date = classDate(c), online = isOnline(date);
@@ -193,12 +193,14 @@ function bindRow(el) {
   el.onpointerdown = e => {
     if (e.target.closest('[data-att]')) return;
     fired = false; sx = e.clientX; sy = e.clientY;
-    if (ui.swap) return;
+    if (ui.swap) { startDrag(e, el, id); return; }
     timer = setTimeout(() => { fired = true; markCalled(id, el); }, 450);
   };
   const cancel = () => { clearTimeout(timer); timer = null; };
-  el.onpointermove = e => { if (Math.abs(e.clientX - sx) > 8 || Math.abs(e.clientY - sy) > 8) cancel(); };
-  el.onpointerup = cancel; el.onpointercancel = cancel; el.onpointerleave = cancel;
+  el.onpointermove = e => { if (drag) { moveDrag(e); return; } if (Math.abs(e.clientX - sx) > 8 || Math.abs(e.clientY - sy) > 8) cancel(); };
+  el.onpointerup = e => { if (drag) { const m = drag.moved; endDrag(); if (m) { e.preventDefault(); return; } } cancel(); };
+  el.onpointercancel = () => { if (drag) endDrag(); cancel(); };
+  el.onpointerleave = cancel;
   el.onclick = e => { if (e.target.closest('[data-att]')) return; if (fired) { fired = false; return; } ui.swap ? swapTap(id) : openPanel(id); };
   el.oncontextmenu = e => e.preventDefault();
   el.querySelectorAll('[data-att]').forEach(b => b.onclick = async e => { e.stopPropagation(); await markAtt(id, b.dataset.att); refreshRow(id); });
@@ -344,13 +346,60 @@ function openGroupPanel(gi) {
 }
 
 // ---------- 换座 / 轮转 ----------
+function swapSeats(a, b) {
+  if (!a || !b || a === b) return false;
+  const c = cls(); let pa, pb;
+  c.groups.forEach((g, gi) => g.student_ids.forEach((sid, si) => { if (sid === a) pa = [gi, si]; if (sid === b) pb = [gi, si]; }));
+  if (!pa || !pb) return false;
+  const groups = JSON.parse(JSON.stringify(c.groups));
+  groups[pa[0]].student_ids[pa[1]] = b; groups[pb[0]].student_ids[pb[1]] = a;
+  db.updateClass(c.id, { groups });
+  toast(`${stuById(a).name} ⇄ ${stuById(b).name}`);
+  return true;
+}
 function swapTap(id) {
   if (!ui.swapFirst) { ui.swapFirst = id; render(); return; }
   if (ui.swapFirst === id) { ui.swapFirst = null; render(); return; }
-  const c = cls(); let pa, pb;
-  c.groups.forEach((g, gi) => g.student_ids.forEach((sid, si) => { if (sid === ui.swapFirst) pa = [gi, si]; if (sid === id) pb = [gi, si]; }));
-  if (pa && pb) { const groups = JSON.parse(JSON.stringify(c.groups)); groups[pa[0]].student_ids[pa[1]] = id; groups[pb[0]].student_ids[pb[1]] = ui.swapFirst; db.updateClass(c.id, { groups }); }
-  ui.swapFirst = null; toast('已互换'); render();
+  swapSeats(ui.swapFirst, id);
+  ui.swapFirst = null; render();
+}
+
+// 换座模式下直接拖卡片。用 pointer 事件，iPad 和鼠标都能用；
+// HTML5 的 draggable 在触屏上不可靠，所以自己做：跟手的克隆 + elementFromPoint 找落点。
+let drag = null;
+function startDrag(e, el, id) {
+  if (!el.classList.contains('card')) return;          // 只在座位图里拖，名单里不拖
+  drag = { id, el, sx: e.clientX, sy: e.clientY, ghost: null, over: null, moved: false };
+  try { el.setPointerCapture(e.pointerId); } catch (_) {}   // 个别浏览器会抛，抛了也不影响拖动
+}
+function moveDrag(e) {
+  if (!drag) return;
+  const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+  if (!drag.moved) {
+    if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;   // 没动够就当成点击
+    drag.moved = true;
+    const r = drag.el.getBoundingClientRect();
+    const g = drag.el.cloneNode(true);
+    g.className = 'card drag-ghost';
+    g.style.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;pointer-events:none;z-index:300;`;
+    document.body.appendChild(g);
+    drag.ghost = g; drag.ox = r.left; drag.oy = r.top;
+    drag.el.classList.add('dragging');
+  }
+  drag.ghost.style.transform = `translate(${dx}px, ${dy}px) scale(1.06)`;
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+  const t = under && under.closest('.card[data-id]');
+  const tgt = t && t.dataset.id !== drag.id ? t : null;
+  if (drag.over !== tgt) { drag.over?.classList.remove('drop'); tgt?.classList.add('drop'); drag.over = tgt; }
+}
+function endDrag() {
+  if (!drag) return;
+  const { moved, id, over } = drag;
+  drag.ghost?.remove(); drag.el.classList.remove('dragging'); over?.classList.remove('drop');
+  drag = null;
+  if (!moved) return;                                   // 没拖动 → 交给 onclick 走点选互换
+  if (over) { ui.swapFirst = null; swapSeats(id, over.dataset.id); }
+  render();
 }
 async function rotate() {
   const c = cls(); if (!c.position_to_group) return;
