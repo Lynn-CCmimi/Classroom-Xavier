@@ -349,3 +349,6 @@ svg { display: block; }
   /* 线上课有四个按钮，才换到第二行 */
   .row.multiatt { grid-template-columns: 28px 1fr 44px; grid-template-areas: "n nm sc" "a a a"; row-gap: 8px; }
 }
+/* 收起的班级（XCE 期间的原班）：标签上加一点区分，提醒不是当前主用的班 */
+.seg button.tuck, .tabbar button.tuck { font-style: italic; }
+.seg button.tuck.on, .tabbar button.tuck.on { box-shadow: inset 0 0 0 1.5px var(--warn); }
